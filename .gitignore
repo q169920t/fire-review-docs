@@ -25,3 +25,6 @@ desktop.ini
 ~$*
 node_modules/
 dist/
+
+# 編譯時複製的主程式（來源在 app/）
+shell/app.html

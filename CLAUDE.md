@@ -17,19 +17,38 @@
 每次 commit 前先檢查差異內容有沒有上述資料。
 
 ## 資料夾架構
-- `app/審勘文件管理.html`：主程式（單一 HTML，內含 JSZip、docx-preview 函式庫與主程式）
-- `docs/`：給人看的說明（開發流程、模板標記規則等）
-- `CHANGELOG.md`：每次發布的更新說明（白話）
+- `app/審勘文件管理.html`：主程式（單一 HTML，內含 JSZip、docx-preview 函式庫與主程式）。可用瀏覽器直接開，也可由 exe 開。
+- `shell/`：exe 外殼（Go + WebView2）。只負責開視窗、本機檔案存取、線上更新；畫面與功能都在 HTML。
+  - `main.go`：本機服務（127.0.0.1:47321，隨機通行碼 `X-App-Token`）、設定檔、更新邏輯
+  - `ui_windows.go`：視窗、選資料夾對話框；`ui_other.go`：Linux 開發測試用（不開視窗）
+  - `build.sh`：編譯 `dist/FireReviewDocs.exe`（會把 HTML 複製成 `shell/app.html` 內嵌）
+- `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，29 項）
+- `.github/workflows/release.yml`：推送 `vX.Y` 標籤時自動編譯並建立 Release
+- `docs/`：給人看的說明；`CHANGELOG.md`：每次發布的更新說明（白話）
+
+## exe 模式的運作
+- 外殼在 HTML 的 `<head>` 注入 `window.__NATIVE__`；HTML 偵測到就改用 `NDir`/`NFile`（模仿瀏覽器資料夾物件，走本機服務），其餘程式不必改。
+- 系統資料夾尋找順序：上次使用 → exe 所在資料夾 → 預設 G:\ 路徑 → 都沒有才請使用者選。
+- 使用者設定存在 `%APPDATA%\審勘文件管理\config.json`；下載的新版畫面與 WebView2 資料在 `%LOCALAPPDATA%\審勘文件管理\`。
+- 線上更新讀 `https://github.com/q169920t/fire-review-docs/releases/latest/download/` 的 `latest.json`、`app.html`、`FireReviewDocs.exe`。
+  - 只改 HTML：`APP_VERSION` 調升即可，使用者按「立即更新」後重新載入畫面。
+  - 改了外殼（shell/）：要調升 `main.go` 的 `ShellVersion`，更新時會換 exe 並重新啟動。
+- 退回舊版的做法：把舊程式碼用**更高的版本號**重新發布（例如 v1.5 有問題 → 以 v1.4 的內容發布 v1.5.1），不要刪 Release。
 
 ## 版本與發布
-- 版本號顯示在畫面右上角（`v1.x`），改版時同步更新程式內版本號與 CHANGELOG.md。
+- 主程式版本號是 HTML 裡的 `const APP_VERSION = 'x.y'`（畫面右上角會顯示），改版時同步更新 CHANGELOG.md。
 - 「存檔上傳」= commit + push 到 main，**不發布**。
-- 「發布 vX.Y」= 打 tag 並建立 GitHub Release，只有使用者明確說要發布時才做。
+- 「發布 vX.Y」= 確認 `APP_VERSION` 與 CHANGELOG 該版段落都寫好 → 打 tag `vX.Y` 推上去，GitHub Actions 自動建立 Release。只有使用者明確說要發布時才做。標籤版本必須等於 `APP_VERSION`，否則打包會失敗。
+- 發布前先跑 `bash tests/run.sh`，全部通過才發布。
 - 設定檔格式有變動時，要寫升級程式（`migrateSettings`），舊的系統設定.json 打開時自動升級，不可遺失使用者資料。
+
+## 開發環境注意（Claude 的雲端環境）
+- Go 套件下載：`export GOPROXY=direct GOSUMDB=off GOTOOLCHAIN=local GOFLAGS=-mod=mod`（proxy.golang.org 不通；golang.org/x/* 已在 go.mod 用 replace 指到 GitHub 鏡像）。
+- 無法在這裡實際開 Windows 視窗；Windows 專屬部分（視窗、選資料夾、換 exe）要請使用者在自己電腦上試。
 
 ## 寫回使用者電腦
 - 寫回後要在使用者電腦上確認檔案版本號正確，再回報完成。
 - 主程式的預設工作資料夾：`G:\我的雲端硬碟\##歌珊\審勘文件系統`（另有 OneDrive 桌面的舊副本）。
 
-## 規劃中
-- 改為免安裝 exe（每人一份放自己電腦）：exe 外殼 + HTML 畫面，啟動時檢查 GitHub Release 自動更新。
+## 使用方式
+- 每人一份 exe 放在自己電腦（位置不限），不需安裝；需要 Windows 10/11 內建的 WebView2。

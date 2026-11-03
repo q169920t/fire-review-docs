@@ -1,0 +1,62 @@
+# 發布新版：推送 vX.Y 標籤時，自動編譯 exe 並建立 GitHub Release
+# Release 會附上三個檔案，程式的線上更新就是讀這三個：
+#   latest.json        最新版本號與更新說明
+#   app.html           主程式畫面
+#   FireReviewDocs.exe 程式本體（外殼）
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: shell/go.mod
+          cache-dependency-path: shell/go.sum
+
+      - name: 檢查版本號
+        id: ver
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          APP=$(grep -oP "APP_VERSION = '\K[0-9.]+" "app/審勘文件管理.html")
+          SHELL_VER=$(grep -oP 'const ShellVersion = "\K[0-9.]+' shell/main.go)
+          echo "tag=$TAG app=$APP shell=$SHELL_VER"
+          if [ "$TAG" != "$APP" ]; then echo "::error::標籤 v$TAG 和主程式版本 $APP 不一致"; exit 1; fi
+          echo "app=$APP" >> "$GITHUB_OUTPUT"
+          echo "shell=$SHELL_VER" >> "$GITHUB_OUTPUT"
+
+      - name: 測試與編譯
+        run: |
+          cp "app/審勘文件管理.html" shell/app.html
+          (cd shell && go vet ./... && go test ./...)
+          bash shell/build.sh
+          cp "app/審勘文件管理.html" dist/app.html
+
+      - name: 產生更新資訊
+        run: |
+          # 從 CHANGELOG.md 取出這一版的說明
+          awk -v v="## v${{ steps.ver.outputs.app }}" '
+            index($0, v) == 1 { on = 1; next }
+            on && /^## / { exit }
+            on { print }' CHANGELOG.md | sed '/./,$!d' > dist/notes.md
+          [ -s dist/notes.md ] || echo "（這一版沒有寫更新說明）" > dist/notes.md
+          jq -n --arg app "${{ steps.ver.outputs.app }}" --arg shell "${{ steps.ver.outputs.shell }}" \
+                --rawfile notes dist/notes.md '{app: $app, shell: $shell, notes: $notes}' > dist/latest.json
+          cat dist/latest.json
+
+      - name: 建立 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/FireReviewDocs.exe dist/app.html dist/latest.json \
+            --title "$GITHUB_REF_NAME" --notes-file dist/notes.md

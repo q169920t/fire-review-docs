@@ -110,6 +110,8 @@ span.pvval{color:#0b57d0}
 @media (max-width:1100px){.genwrap{grid-template-columns:1fr}.pvpane{position:relative;height:75vh}}
 details summary{cursor:pointer;color:var(--sub);font-size:13px}
 .kbd{border:1px solid var(--line);border-radius:4px;padding:0 5px;background:var(--soft);font-size:13px}
+.updbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--warn-soft);border-bottom:1px solid var(--line);padding:8px 16px;font-size:14px}
+.updbar details{flex-basis:100%}.updbar pre{white-space:pre-wrap;margin:6px 0 0;font-family:inherit}
 </style>
 </head>
 <body>
@@ -118,7 +120,7 @@ details summary{cursor:pointer;color:var(--sub);font-size:13px}
   <div class="meta">
     <span id="rootName" title="點一下可改選其他系統資料夾" style="cursor:pointer;text-decoration:underline dotted">尚未選擇系統資料夾</span>
     <label>使用者 <input id="userName" type="text" placeholder="你的名字"></label>
-    <span>v1.3</span>
+    <span id="appVer"></span>
   </div>
 </header>
 <div class="layout" id="layout" style="display:none">
@@ -149,6 +151,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const SETTINGS_FILE = '系統設定.json';
 const CASE_FILE = '案件資料.json';
+const APP_VERSION = '1.4';
 const TPL_DIR = 'templates';
 const BAD_CHARS = /[\\/:*?"<>|]/;
 const $ = s => document.querySelector(s);
@@ -208,8 +211,122 @@ const ls = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
 
+/* ==================== exe 模式（由 exe 外殼提供本機檔案存取） ==================== */
+// 用 exe 開啟時，外殼會注入 window.__NATIVE__；用瀏覽器開啟時沒有，維持原本做法。
+const NATIVE = window.__NATIVE__ || null;
+const MIME = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', json: 'application/json', html: 'text/html' };
+const nat = {
+  info: null, sep: '\\',
+  q: p => '?path=' + encodeURIComponent(p),
+  async call(method, url, body, raw) {
+    const headers = { 'X-App-Token': NATIVE.token };
+    if (body != null && !raw) headers['Content-Type'] = 'application/json';
+    const r = await fetch(url, { method, headers, body: body == null ? undefined : (raw ? body : JSON.stringify(body)) });
+    if (!r.ok) {
+      const t = await r.text().catch(() => '');
+      throw new DOMException(t || ('HTTP ' + r.status), r.status === 404 ? 'NotFoundError' : r.status === 403 ? 'NotAllowedError' : 'InvalidStateError');
+    }
+    return r;
+  },
+  async json(method, url, body) { return (await this.call(method, url, body)).json(); },
+  join(dir, name) { return /[\\/]$/.test(dir) ? dir + name : dir + nat.sep + name; },
+  base(p) { const s = p.replace(/[\\/]+$/, ''); const i = Math.max(s.lastIndexOf('\\'), s.lastIndexOf('/')); return (i < 0 ? s : s.slice(i + 1)) || p; },
+  norm: p => String(p || '').replace(/[\\/]+$/, '').toLowerCase()
+};
+// 以下兩個類別模仿瀏覽器的資料夾／檔案物件，讓原本的程式不用改就能使用
+class NDir {
+  constructor(path) { this.path = path; this.kind = 'directory'; this.name = nat.base(path); }
+  async queryPermission() { return 'granted'; }
+  async requestPermission() { return 'granted'; }
+  async isSameEntry(o) { return !!o && o.path != null && nat.norm(o.path) === nat.norm(this.path); }
+  async getDirectoryHandle(name, opt = {}) {
+    const p = nat.join(this.path, name), st = await nat.json('GET', '/api/stat' + nat.q(p));
+    if (st.exists && !st.dir) throw new DOMException('「' + name + '」不是資料夾', 'TypeMismatchError');
+    if (!st.exists) { if (!opt.create) throw new DOMException('找不到資料夾「' + name + '」', 'NotFoundError'); await nat.call('POST', '/api/mkdir' + nat.q(p)); }
+    return new NDir(p);
+  }
+  async getFileHandle(name, opt = {}) {
+    const p = nat.join(this.path, name), st = await nat.json('GET', '/api/stat' + nat.q(p));
+    if (st.exists && st.dir) throw new DOMException('「' + name + '」不是檔案', 'TypeMismatchError');
+    if (!st.exists && !opt.create) throw new DOMException('找不到檔案「' + name + '」', 'NotFoundError');
+    return new NFile(p);
+  }
+  async removeEntry(name) { await nat.call('POST', '/api/remove' + nat.q(nat.join(this.path, name))); }
+  async *entries() {
+    for (const e of await nat.json('GET', '/api/list' + nat.q(this.path)))
+      yield [e.name, e.dir ? new NDir(nat.join(this.path, e.name)) : new NFile(nat.join(this.path, e.name))];
+  }
+  async *values() { for await (const [, hd] of this.entries()) yield hd; }
+}
+class NFile {
+  constructor(path) { this.path = path; this.kind = 'file'; this.name = nat.base(path); }
+  async getFile() {
+    const r = await nat.call('GET', '/api/read' + nat.q(this.path));
+    const ext = (this.name.split('.').pop() || '').toLowerCase();
+    return new File([await r.blob()], this.name, { type: MIME[ext] || '', lastModified: +r.headers.get('X-Mtime') || Date.now() });
+  }
+  async createWritable() {
+    const parts = [], path = this.path;
+    return {
+      async write(d) { parts.push(d && d.type === 'write' ? d.data : d); },
+      async close() { await nat.call('PUT', '/api/write' + nat.q(path), new Blob(parts), true); }
+    };
+  }
+}
+const PICK_TITLE = { root: '選擇「審勘文件系統」資料夾', caseOut: '選擇案件資料夾', scanSrc: '選擇放掃描檔的資料夾', scanOut: '選擇改名後要存放的資料夾' };
+async function nativePickDir(id) {
+  try {
+    const last = (nat.info && nat.info.lastDirs) || {};
+    const r = await nat.json('POST', '/api/pickdir', { title: PICK_TITLE[id] || '選擇資料夾', start: last[id] || (S.root && S.root.path) || '' });
+    if (!r.path) return null;
+    if (nat.info) nat.info.lastDirs = { ...last, [id]: r.path };
+    nat.json('POST', '/api/config', { lastDir: { [id]: r.path } }).catch(() => {});
+    return new NDir(r.path);
+  } catch (e) { toast('無法開啟資料夾：' + e.message); return null; }
+}
+async function nativeOpenFolder(dir) { try { await nat.call('POST', '/api/open' + nat.q(dir.path)); } catch (e) { toast('無法開啟資料夾：' + e.message); } }
+// 依序尋找系統資料夾：上次用的 → exe 所在資料夾 → 預設的雲端硬碟路徑
+async function bootNative() {
+  try { nat.info = await nat.json('GET', '/api/info'); nat.sep = nat.info.sep || '\\'; }
+  catch (e) { toast('程式內部服務沒有回應：' + e.message, 6000); return false; }
+  for (const p of [...new Set([nat.info.root, nat.info.exeDir, nat.info.defaultRoot].filter(Boolean))]) {
+    try {
+      const st = await nat.json('GET', '/api/stat' + nat.q(nat.join(p, TPL_DIR)));
+      if (st.exists && st.dir && await openRoot(new NDir(p), true)) return true;
+    } catch {}
+  }
+  return false;
+}
+/* 線上更新：開啟後在背景檢查 GitHub 上有沒有新版 */
+function checkUpdateLater() {
+  if (!NATIVE) return;
+  setTimeout(async () => {
+    let r; try { r = await nat.json('GET', '/api/update/check'); } catch { return; }
+    if (r.hasUpdate) showUpdateBar(r);
+  }, 1500);
+}
+function showUpdateBar(r) {
+  const old = $('#updBar'); if (old) old.remove();
+  const btn = h('button', { class: 'btn primary', onclick: () => applyUpdate(btn) }, '立即更新');
+  const bar = h('div', { id: 'updBar', class: 'updbar' },
+    h('b', {}, `有新版本 v${r.latest}`), h('span', { class: 'muted' }, `（目前 v${r.current}）`), btn,
+    h('button', { class: 'btn', onclick: () => bar.remove() }, '稍後'),
+    r.notes ? h('details', {}, h('summary', {}, '這次更新了什麼'), h('pre', {}, r.notes)) : null);
+  document.querySelector('header').after(bar);
+}
+async function applyUpdate(btn) {
+  if (!await confirmBox('更新程式', '更新後畫面會重新載入，正在填寫的案件資料會保留。<br>如果正在修改設定，請先存檔再更新。', '開始更新')) return;
+  btn.disabled = true; btn.textContent = '下載中…';
+  try {
+    const r = await nat.json('POST', '/api/update/apply');
+    if (r.restart) { toast('更新完成，程式即將重新開啟…', 8000); await nat.call('POST', '/api/restart'); }
+    else location.reload();
+  } catch (e) { btn.disabled = false; btn.textContent = '立即更新'; await modal('更新失敗', esc(e.message) + '<br>可以稍後再試，目前的版本仍可正常使用。'); }
+}
+
 /* ==================== 檔案存取 ==================== */
 async function pickDir(id) {
+  if (NATIVE) return nativePickDir(id);
   if (!window.showDirectoryPicker) { await modal('瀏覽器不支援', '請改用 <b>Microsoft Edge</b> 或 <b>Google Chrome</b> 開啟本軟體。'); return null; }
   try { return await window.showDirectoryPicker({ id, mode: 'readwrite' }); }
   catch (e) { if (e.name !== 'AbortError') toast('無法開啟資料夾：' + e.message); return null; }
@@ -495,6 +612,21 @@ const ROOT_HINT = 'G:\\我的雲端硬碟\\##歌珊\\審勘文件系統';
 async function boot() {
   $('#userName').value = ls.get('userName', '');
   $('#userName').addEventListener('change', e => ls.set('userName', e.target.value.trim()));
+  $('#appVer').textContent = 'v' + APP_VERSION;
+  if (NATIVE) {
+    checkUpdateLater();
+    if (await bootNative()) return;
+    $('#welcome').innerHTML = '';
+    $('#welcome').append(h('div', { class: 'welcome' },
+      h('h2', {}, '消防審勘文件管理'),
+      h('p', {}, '找不到共用的系統資料夾，請指定一次，之後打開程式就會自動進入。'),
+      h('ol', {},
+        h('li', {}, '按下方按鈕，選擇：', h('b', { class: 'mono' }, ROOT_HINT), '（裡面要有 templates 資料夾）'),
+        h('li', {}, '右上角填寫你的名字，修改設定時會留下紀錄。')),
+      h('div', { class: 'row', style: 'margin-top:18px' },
+        h('button', { class: 'btn primary', onclick: async () => { const d = await pickDir('root'); if (d) openRoot(d); } }, '選擇系統資料夾'))));
+    return;
+  }
   const saved = await idb.get('rootHandle');
   // 上次的資料夾若仍有權限，直接開啟，不必再選
   if (saved && typeof saved.queryPermission === 'function') {
@@ -527,7 +659,9 @@ async function openRoot(handle, auto) {
       await modal('找不到 templates 資料夾', `你選的「${esc(handle.name)}」裡沒有 <b>templates</b> 子資料夾。<br>請選擇正確的系統資料夾：${esc(ROOT_HINT)}`);
       return false;
     }
-    S.root = handle; await idb.set('rootHandle', handle);
+    S.root = handle;
+    if (NATIVE) await nat.json('POST', '/api/config', { root: handle.path }).catch(() => {});
+    else await idb.set('rootHandle', handle);
     await loadSettings();
     await scanTemplates();
     S.cs = normalizeCase(Object.assign(blankCase(), ls.get('draftCase', {})));
@@ -535,6 +669,7 @@ async function openRoot(handle, auto) {
     if (!S.cs.category && S.settings.categories[0]) selectCategory(S.settings.categories[0].id, true);
     $('#welcome').innerHTML = ''; $('#layout').style.display = 'flex';
     $('#rootName').textContent = '系統資料夾：' + handle.name;
+    if (NATIVE) $('#rootName').title = handle.path + '\n點一下可改選其他系統資料夾';
     render();
     return true;
   } catch (e) { console.error(e); if (!auto) toast('開啟失敗：' + e.message, 5000); return false; }
@@ -946,8 +1081,10 @@ async function generate() {
   try { await writeFile(out, CASE_FILE, JSON.stringify(record, null, 2)); report.push({ type: 'info', text: `已儲存 ${CASE_FILE}（之後可「載入舊案件」或做掃描改名）` }); } catch (e) { report.push({ type: 'err', text: '案件資料儲存失敗：' + e.message }); }
   const sheet = stampSheetHtml(record);
   try { await writeFile(out, '用印檢查表.html', sheet); report.push({ type: 'info', text: '已儲存 用印檢查表.html' }); } catch {}
-  const go = await modal('產出結果', h('div', {}, h('p', {}, `存放位置：${out.name}`), msgList(report)), [{ label: '關閉', value: false }, { label: '列印用印檢查表', value: true, primary: true }]);
-  if (go) printHtml(sheet);
+  const go = await modal('產出結果', h('div', {}, h('p', {}, `存放位置：${out.name}`), msgList(report)),
+    [{ label: '關閉', value: false }, ...(NATIVE ? [{ label: '開啟資料夾', value: 'open' }] : []), { label: '列印用印檢查表', value: true, primary: true }]);
+  if (go === 'open') nativeOpenFolder(out);
+  else if (go) printHtml(sheet);
 }
 
 /* 用印檢查表 */
