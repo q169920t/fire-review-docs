@@ -46,7 +46,7 @@ jobs:
             HEAD_LINE=$(grep -m1 "^## v$APP（" CHANGELOG.md || true)
             if [ -z "$HEAD_LINE" ]; then echo "CHANGELOG 沒有 v$APP 段落，不發布"
             elif echo "$HEAD_LINE" | grep -q "尚未發布"; then echo "v$APP 標示尚未發布，不發布"
-            elif gh release view "v$APP" >/dev/null 2>&1 || git rev-parse -q --verify "refs/tags/v$APP" >/dev/null; then echo "v$APP 已經發布過"
+            elif [ "$(gh release view "v$APP" --json isDraft,assets -q 'if .isDraft then 0 else (.assets|length) end' 2>/dev/null || echo 0)" = "3" ]; then echo "v$APP 已經發布過"
             else GO=yes; fi
           fi
           echo "release=$GO" >> "$GITHUB_OUTPUT"
