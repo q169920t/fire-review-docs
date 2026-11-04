@@ -162,7 +162,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const SETTINGS_FILE = '系統設定.json';
 const CASE_FILE = '案件資料.json';
-const APP_VERSION = '1.6';
+const APP_VERSION = '1.7';
 const TPL_DIR = 'templates';
 const BAD_CHARS = /[\\/:*?"<>|]/;
 const $ = s => document.querySelector(s);
@@ -759,6 +759,24 @@ function selectCategory(id, silent) {
   S.cs.docChoices = {}; for (const d of cat.docIds) S.cs.docChoices[d] = { include: true, tpl: 0 };
   if (!silent) saveDraft();
 }
+// 案件類別下拉選單（文件產出頁最上方與第 5 步共用）
+function categoryPicker(cat) {
+  const sel = h('select', { style: 'min-width:200px', onchange: async e => {
+    const id = e.target.value, to = catById(id);
+    if (cat && !await confirmBox('更換案件類別', `要從「${esc(cat.name)}」換成「${esc(to ? to.name : '')}」嗎？<br>資料檢查表、要產出的文件、類別預設的勾選項目會換成新類別的設定；已填的案件資料（工程名稱、業主、建築師等）會保留。`, '更換')) { e.target.value = S.cs.category; return; }
+    switchCategory(id); render(); } },
+    cat ? null : h('option', { value: '' }, '— 請選擇 —'),
+    S.settings.categories.map(c => h('option', { value: c.id, selected: c.id === S.cs.category }, c.name)));
+  return sel;
+}
+// 換類別：保留使用者自己勾的項目，只把舊類別的預設勾選換成新類別的預設勾選
+function switchCategory(id) {
+  const old = catById(S.cs.category), keep = { ...S.cs.checks };
+  if (old) for (const k of old.checks || []) delete keep[k];
+  selectCategory(id, true);
+  Object.assign(S.cs.checks, keep);
+  saveDraft();
+}
 function caseDocs() {
   const cat = catById(S.cs.category); if (!cat) return [];
   return cat.docIds.map(docById).filter(Boolean).map(d => {
@@ -959,7 +977,7 @@ function viewGen(main) {
     h('button', { class: 'btn', onclick: () => { S.tab = 'cases'; render(); } }, '我的案件…'),
     h('button', { class: 'btn', onclick: loadOldCase }, '從資料夾載入'),
     h('button', { class: 'btn', onclick: async () => { if (await confirmBox('清空表單', '確定要清空目前填寫的資料，開始新案件嗎？' + (S.editing ? '<br>（已產出的案件不受影響，之後可從「我的案件」再打開。）' : ''))) { const c = cs.category; endEditing(); S.cs = blankCase(); if (c) selectCategory(c); saveDraft(); render(); } } }, '新案件（清空）'),
-    cat ? h('span', { class: 'muted' }, '類別：', h('b', {}, cat.name)) : null)));
+    h('label', { class: 'row', style: 'gap:6px;margin-left:auto' }, h('span', { class: 'muted' }, '案件類別'), categoryPicker(cat)))));
   const pvSteps = [];
   const addCard = (card, title, docs) => { card.dataset.step = pvSteps.length; pvSteps.push({ title, docs }); card.addEventListener('focusin', () => setPvStep(+card.dataset.step)); card.addEventListener('click', () => setPvStep(+card.dataset.step)); left.append(card); };
   let n = 0;
@@ -988,10 +1006,7 @@ function viewGen(main) {
   n++;
   const c5 = h('div', { class: 'card step' }, h('h3', {}, stepNo(n), '確認案件類別與檔名'));
   const g = h('div', { class: 'grid' });
-  g.append(h('label', { class: 'f' }, '案件類別', h('select', { onchange: async e => {
-      if (cat && !await confirmBox('更換類別', '更換類別會把勾選項目與檢查表重設為新類別的預設值（已填的文字資料會保留）。確定嗎？', '更換')) { e.target.value = cs.category; return; }
-      selectCategory(e.target.value); render(); } },
-    h('option', { value: '' }, '— 請選擇 —'), S.settings.categories.map(c => h('option', { value: c.id, selected: c.id === cs.category }, c.name)))));
+  g.append(h('label', { class: 'f' }, '案件類別', categoryPicker(cat)));
   g.append(h('label', { class: 'f' }, h('span', {}, '工程名稱縮寫（用於檔名）', h('span', { class: 'req' }, ' *')),
     h('input', { type: 'text', value: cs.abbr, class: cs.abbr && BAD_CHARS.test(cs.abbr) ? 'bad' : '', placeholder: '例如：城市倉儲', oninput: e => { cs.abbr = e.target.value.trim(); saveDraft(); updatePreviewNames(); } })));
   c5.append(g);
