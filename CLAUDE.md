@@ -23,7 +23,7 @@
   - `ui_windows.go`：視窗、選資料夾對話框；`ui_other.go`：Linux 開發測試用（不開視窗）
   - `build.sh`：編譯 `dist/FireReviewDocs.exe`（會把 HTML 複製成 `shell/app.html` 內嵌）
 - `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，45 項）
-- `.github/workflows/release.yml`：推送 `vX.Y` 標籤時自動編譯並建立 Release
+- `.github/workflows/release.yml`：main 上 CHANGELOG 出現有日期的新版本時，自動編譯並建立 Release
 - `docs/`：給人看的說明；`CHANGELOG.md`：每次發布的更新說明（白話）
 
 ## exe 模式的運作
@@ -44,7 +44,9 @@
 ## 版本與發布
 - 主程式版本號是 HTML 裡的 `const APP_VERSION = 'x.y'`（畫面右上角會顯示），改版時同步更新 CHANGELOG.md。
 - 「存檔上傳」= commit + push 到 main，**不發布**。
-- 「發布 vX.Y」= 確認 `APP_VERSION` 與 CHANGELOG 該版段落都寫好 → 打 tag `vX.Y` 推上去，GitHub Actions 自動建立 Release。只有使用者明確說要發布時才做。標籤版本必須等於 `APP_VERSION`，否則打包會失敗。
+- 「發布 vX.Y」= 確認 `APP_VERSION` 是 X.Y，把 CHANGELOG 該版標題的「（尚未發布）」改成日期，例如 `## v1.6（2026-11-10）`，commit + push 到 main。GitHub Actions 偵測到「有日期、且還沒發布過」的版本，就會自動編譯並建立 Release 與標籤。只有使用者明確說要發布時才改日期。
+  - 平常開發中的版本，CHANGELOG 標題一律寫「（尚未發布）」，否則一 push 就會發布。
+  - 這個雲端環境不能推送標籤、也不能直接建立 Release（HTTP 403），所以才用這個方式。
 - 發布前先跑 `bash tests/run.sh`，全部通過才發布。
 - 設定檔格式有變動時，要寫升級程式（`migrateSettings`），舊的系統設定.json 打開時自動升級，不可遺失使用者資料。
 
