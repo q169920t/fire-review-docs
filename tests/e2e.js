@@ -48,6 +48,26 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const t0 = await page.evaluate(() => S.tplFiles[0]);
   check('模板修改時間正確', Math.abs(t0.lastModified - fs.statSync(path.join(W, 'root', 'templates', t0.name)).mtimeMs) < 2, t0.name);
 
+  // 3b. 產出前在預覽上改字
+  await page.evaluate(() => { setPvStep(1); });
+  await sleep(500);
+  await page.click('#pvpane .pvtabs button:has-text("委託書")');
+  await page.waitForSelector('#pvbody p[data-pi]', { timeout: 10000 });
+  check('預覽段落可點選修改', (await page.$$('#pvbody p[data-pi]')).length >= 3);
+  check('預覽沒有殘留段落編號', !(await page.textContent('#pvbody')).includes(''));
+  await page.click('#pvbody p[data-pi]:has-text("工程名稱")');
+  await page.waitForSelector('.modal textarea');
+  const orig = await page.inputValue('.modal textarea');
+  check('編輯框顯示模板原文（含 {欄位}）', orig === '工程名稱：{工程名稱}　地址：{建築地址}', orig);
+  await page.fill('.modal textarea', '本案名稱：{工程名稱');
+  await page.click('.modal .btn.primary:has-text("套用")'); await sleep(300);
+  check('大括號不成對會提醒', (await page.textContent('.modal .ederr')).includes('不成對'));
+  await page.fill('.modal textarea', '本案名稱：{工程名稱}　地址：{建築地址}');
+  await page.click('.modal .btn.primary:has-text("套用")');
+  await page.waitForSelector('#pvbody p.pved', { timeout: 10000 });
+  check('預覽立即顯示修改後文字', (await page.textContent('#pvbody p.pved')).includes('本案名稱：'));
+  check('顯示已修改段數', (await page.textContent('#pvedits')).includes('1 段'));
+
   // 4. 產出文件
   pick = path.join(W, 'case');
   await page.evaluate(() => {
@@ -74,6 +94,29 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const wt = outs.find(f => f.includes('委託書'));
   const xml = require('child_process').execSync(`unzip -p "${path.join(W, 'case', wt)}" word/document.xml`).toString();
   check('Word 內容已帶入資料', xml.includes('城市倉儲新建工程') && !xml.includes('{工程名稱}'), wt);
+  check('Word 套用修改的文字', xml.includes('本案名稱：') && !xml.includes('工程名稱：城市'));
+  check('其他段落維持原樣（粗體、定位點）', xml.includes('<w:tab/>') && xml.includes('<w:b/>'));
+  const sq = require('child_process').execSync(`unzip -p "${path.join(W, 'case', outs.find(f => f.includes('申請書')))}" word/document.xml`).toString();
+  check('其他文件不受影響', sq.includes('工程名稱：') && !sq.includes('本案名稱'));
+  const rec = JSON.parse(fs.readFileSync(path.join(W, 'case', '案件資料.json'), 'utf8'));
+  check('案件資料記住修改內容', Object.values(rec.edits.d08.paras).includes('本案名稱：{工程名稱}　地址：{建築地址}'));
+
+  // 4b. 另存為模板版本
+  await page.click('#pvedits button:has-text("另存為模板版本")');
+  await page.fill('.modal input', '倉儲用');
+  await page.click('.modal .btn.primary:has-text("存檔")'); await sleep(2500);
+  const vf = path.join(W, 'root', 'templates', '委託書_倉儲用_template.docx');
+  check('另存的模板檔已建立', fs.existsSync(vf));
+  const vx = fs.existsSync(vf) ? require('child_process').execSync(`unzip -p "${vf}" word/document.xml`).toString() : '';
+  check('另存的模板保留 {欄位}', vx.includes('本案名稱：{工程名稱}') && !vx.includes('城市倉儲'));
+  const st2 = JSON.parse(fs.readFileSync(path.join(W, 'root', '系統設定.json'), 'utf8'));
+  const d08 = st2.docs.find(d => d.id === 'd08');
+  check('新版本出現在版本選單', d08.templates.some(t => t.label === '倉儲用' && t.file === '委託書_倉儲用_template.docx'));
+  check('版本紀錄有寫來源', (st2.templates['委託書_倉儲用_template.docx'].history[0].note || '').includes('另存'));
+  const after = await page.evaluate(() => ({ tpl: S.cs.docChoices.d08.tpl, ed: !!S.cs.edits.d08 }));
+  check('案件改用新版本、修改已併入', after.tpl === 1 && !after.ed, JSON.stringify(after));
+  await sleep(1200);
+  check('新版本預覽沒有修改標記', (await page.$$('#pvbody p.pved')).length === 0 && (await page.textContent('#pvbody')).includes('本案名稱：'));
 
   // 5. 掃描檔：讀、寫、刪、同資料夾判斷
   const r5 = await page.evaluate(async (dir) => {

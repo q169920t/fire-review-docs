@@ -97,6 +97,14 @@ main.wide{padding-right:16px}
 .pvempty{color:var(--sub);padding:40px 20px;text-align:center;background:#fff;height:100%}
 mark.pvmiss{background:#ffe066;color:#7a5a00;border-radius:2px;padding:0 2px;font-size:.9em}
 span.pvval{color:#0b57d0}
+.pvbody p[data-pi]{cursor:text}
+.pvbody p[data-pi]:hover{outline:2px dashed rgba(180,35,42,.45);outline-offset:2px}
+.pvbody p.pved{text-decoration:underline dotted #d08000;text-decoration-thickness:2px;text-underline-offset:3px;background:rgba(255,214,102,.18)}
+.pvedits{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--sub);padding:4px 0 2px}
+.pvedits b{color:#9a6700}
+.edhint{font-size:13px;color:var(--sub);margin:0 0 8px;line-height:1.6}
+.edhint code{color:#0b57d0}
+.ederr{color:var(--err);font-size:13px;margin-top:6px}
 .cltable{font-family:"標楷體","DFKai-SB","Microsoft JhengHei",serif;font-size:15px;border:2px solid #222}
 .cltable th,.cltable td{border:1px solid #444;padding:6px 6px;vertical-align:middle}
 .cltable th{background:#f1f1f1;color:#222;text-align:center;font-size:15px}
@@ -151,7 +159,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const SETTINGS_FILE = '系統設定.json';
 const CASE_FILE = '案件資料.json';
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 const TPL_DIR = 'templates';
 const BAD_CHARS = /[\\/:*?"<>|]/;
 const $ = s => document.querySelector(s);
@@ -407,8 +415,42 @@ async function analyzeTemplate(buf) {
 }
 
 /* 填入資料：resolve(name, ctx) 傳回要替換的文字 */
-async function fillTemplate(buf, resolve) {
+/* ---------- 段落文字修改（產出前在預覽上直接改字） ---------- */
+// 段落的「文字元素」：文字、定位點（\t）、換行（\n）；分頁符號不動
+const isTextEl = c => c.namespaceURI === W && (c.localName === 't' || c.localName === 'tab' || c.localName === 'cr' ||
+  (c.localName === 'br' && !['page', 'column'].includes(c.getAttributeNS(W, 'type') || c.getAttribute('w:type'))));
+const paraRuns = p => wEls(p, 'r').filter(r => closestW(r, 'p') === p);
+function paraPlain(p) {
+  let s = '';
+  for (const r of paraRuns(p)) for (const c of r.childNodes) if (isTextEl(c)) s += c.localName === 't' ? c.textContent : c.localName === 'tab' ? '\t' : '\n';
+  return s;
+}
+// 整段換成新文字，沿用第一段文字的字型格式
+function setParaText(p, text) {
+  const runs = paraRuns(p).filter(r => [...r.childNodes].some(isTextEl));
+  if (!runs.length) return false;
+  const first = runs[0], doc = p.ownerDocument;
+  for (const r of runs) for (const c of [...r.childNodes]) if (isTextEl(c)) r.removeChild(c);
+  String(text).split('\n').forEach((line, li) => {
+    if (li) first.appendChild(doc.createElementNS(W, 'w:br'));
+    line.split('\t').forEach((seg, si) => {
+      if (si) first.appendChild(doc.createElementNS(W, 'w:tab'));
+      if (seg) { const t = doc.createElementNS(W, 'w:t'); t.setAttribute('xml:space', 'preserve'); t.textContent = seg; first.appendChild(t); }
+    });
+  });
+  return true;
+}
+// 預覽時在每段開頭放看不見的段落編號，畫面上點哪一段才知道對應模板的哪一段
+const PI_RE = /([-]+)/g;
+const piTag = i => '' + String(i).split('').map(d => String.fromCharCode(0xE010 + +d)).join('') + '';
+const piNum = s => +s.split('').map(c => c.charCodeAt(0) - 0xE010).join('');
+const bodyParas = pkg => { const part = pkg.parts.find(x => x.name === 'word/document.xml'); return part ? wEls(part.doc, 'p') : []; };
+
+/* 填入資料：opt.edits = { 段落編號: 新文字 }；opt.tag = 預覽用段落編號 */
+async function fillTemplate(buf, resolve, opt = {}) {
   const pkg = await loadDocx(buf);
+  const paras = bodyParas(pkg);
+  if (opt.edits) for (const [i, t] of Object.entries(opt.edits)) if (paras[+i]) setParaText(paras[+i], t);
   for (const part of pkg.parts) {
     const rowCount = new Map();
     for (const p of wEls(part.doc, 'p')) {
@@ -436,6 +478,10 @@ async function fillTemplate(buf, resolve) {
       }
       ts.forEach((t, i) => { if (t.textContent !== texts[i]) { t.textContent = texts[i]; t.setAttribute('xml:space', 'preserve'); } });
     }
+    if (opt.tag && part.name === 'word/document.xml') paras.forEach((p, i) => {
+      const ts = paraTexts(p); if (!ts.length) return;
+      ts[0].textContent = piTag(i) + ts[0].textContent; ts[0].setAttribute('xml:space', 'preserve');
+    });
     let xml = new XMLSerializer().serializeToString(part.doc);
     if (!xml.startsWith('<?xml')) xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' + xml;
     pkg.zip.file(part.name, xml);
@@ -530,7 +576,7 @@ const S = {
   scan: { caseInfo: null, dir: null, files: [], assign: {}, sel: null, url: null, delSrc: false }
 };
 function blankCase() {
-  return { category: '', abbr: '', docChoices: {}, cl: {}, checks: {}, pairs: {}, values: { ...rocToday() } };
+  return { category: '', abbr: '', docChoices: {}, cl: {}, checks: {}, pairs: {}, edits: {}, values: { ...rocToday() } };
 }
 
 /* ==================== 設定檔讀寫（多人共用防覆蓋） ==================== */
@@ -697,7 +743,7 @@ function saveDraft() { ls.set('draftCase', S.cs); if (S.tab === 'gen') scheduleP
 function resetChecklist(cat) { S.cs.cl = {}; for (const n of cat.needed || []) S.cs.cl[n] = '有'; }
 function normalizeCase(c) { // 舊格式轉換
   if (!c.cl) { c.cl = {}; for (const n of c.needed || []) c.cl[n] = '有'; }
-  delete c.needed; c.pairs = c.pairs || {}; c.checks = c.checks || {};
+  delete c.needed; c.pairs = c.pairs || {}; c.checks = c.checks || {}; c.edits = c.edits || {};
   if (c.checks['用途其他']) { c.checks['其他事項'] = true; delete c.checks['用途其他']; }
   return c;
 }
@@ -745,6 +791,8 @@ function validateCase() {
     seen[cd.doc.no] = cd.doc.name;
     if (BAD_CHARS.test(cd.doc.name)) E(`文件名稱「${cd.doc.name}」含有檔名不能用的符號。`);
   }
+  for (const cd of docs) { const e = S.cs.edits && S.cs.edits[cd.doc.id];
+    if (e && e.file !== cd.file && Object.keys(e.paras || {}).length) Wn(`「${cd.doc.name}」之前修改的文字是針對另一個版本（${e.file}），目前選的版本不同，這次不會套用。`); }
   const items = checklistItems(cat);
   if (items.length) for (const cd of docs) if (cd.doc.no > 0 && !items.some(i => i.no === cd.doc.no)) Wn(`「${cd.doc.name}」的項次 ${cd.doc.no} 不在資料檢查表上。`);
   if (items.length && docs.some(x => x.doc.checklist)) for (const cd of docs) if (cd.doc.no > 0 && clState(cd.doc.no) === '不須') Wn(`有產出「${cd.doc.name}」，但資料檢查表第 ${cd.doc.no} 項勾的是「不須」。`);
@@ -987,7 +1035,8 @@ function buildPvPane() {
   const zb = (t, f) => h('button', { class: 'btn small', onclick: () => { PV.zoom = f(PV.zoom); ls.set('pvZoom', PV.zoom); applyZoom(); } }, t);
   pane.append(h('div', { class: 'pvhead' }, h('div', { class: 'pvtitle row', style: 'justify-content:space-between' }, '即時預覽・' + st.title,
       h('span', { class: 'row', style: 'gap:4px' }, zb('－', z => Math.max(0.5, z - 0.15)), zb('符合寬度', () => 1), zb('＋', z => Math.min(2.5, z + 0.15)))),
-    h('div', { class: 'pvtabs' }, st.docs.map(cd => h('button', { class: cd.doc.id === PV.doc ? 'on' : '', onclick: () => { PV.doc = cd.doc.id; buildPvPane(); } }, cd.doc.name)))),
+    h('div', { class: 'pvtabs' }, st.docs.map(cd => h('button', { class: cd.doc.id === PV.doc ? 'on' : '', onclick: () => { PV.doc = cd.doc.id; buildPvPane(); } }, cd.doc.name))),
+    h('div', { class: 'pvedits', id: 'pvedits' })),
     h('div', { class: 'pvbody', id: 'pvbody' }, h('div', { class: 'pvempty' }, '產生預覽中…')));
   schedulePreview(0);
 }
@@ -1004,12 +1053,14 @@ async function renderPreview() {
   const cd = caseDocs().find(x => x.doc.id === PV.doc); if (!cd || !cd.file || !S.tplInfo[cd.file]) { body.innerHTML = '<div class="pvempty">找不到這份文件的模板</div>'; return; }
   const tok = ++PV.token;
   try {
-    const blob = await fillTemplate((await tplBuffer(cd.file)).slice(0), resolver(cd, true));
+    const blob = await fillTemplate((await tplBuffer(cd.file)).slice(0), resolver(cd, true), { edits: docEdits(cd), tag: true });
     if (tok !== PV.token) return;
     const tmp = h('div', {});
     await docx.renderAsync(blob, tmp, null, { inWrapper: true, breakPages: true, ignoreLastRenderedPageBreak: false, experimental: true, useBase64URL: true, renderHeaders: true, renderFooters: true });
     if (tok !== PV.token) return;
+    tagPreview(tmp, cd);
     markPreview(tmp);
+    updatePvEdits(cd);
     const y = body.scrollTop; body.innerHTML = ''; body.append(tmp);
     applyZoom(); body.scrollTop = y;
   } catch (e) { console.error(e); if (tok === PV.token) body.innerHTML = '<div class="pvempty">預覽失敗：' + esc(e.message) + '</div>'; }
@@ -1033,6 +1084,107 @@ function markPreview(root) {
     }
     frag.append(s.slice(last)); t.replaceWith(frag);
   }
+}
+function tagPreview(root, cd) {
+  const ed = docEdits(cd) || {};
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); const nodes = [];
+  while (walker.nextNode()) if (walker.currentNode.nodeValue.includes('')) nodes.push(walker.currentNode);
+  for (const t of nodes) {
+    const p = t.parentElement && t.parentElement.closest('p');
+    for (const m of t.nodeValue.matchAll(PI_RE)) if (p && !p.dataset.pi && !p.closest('header,footer')) {
+      p.dataset.pi = piNum(m[1]); p.title = '點一下可以修改這段文字';
+      if (ed[p.dataset.pi] != null) p.classList.add('pved');
+    }
+    t.nodeValue = t.nodeValue.replace(PI_RE, '');
+  }
+  root.addEventListener('click', e => {
+    const p = e.target.closest && e.target.closest('p[data-pi]');
+    if (p && !window.getSelection().toString()) editPara(cd, +p.dataset.pi);
+  });
+}
+function docEdits(cd) { const e = S.cs.edits && S.cs.edits[cd.doc.id]; return e && e.file === cd.file && Object.keys(e.paras || {}).length ? e.paras : null; }
+function updatePvEdits(cd) {
+  const bar = $('#pvedits'); if (!bar) return;
+  bar.innerHTML = '';
+  const ed = docEdits(cd), n = ed ? Object.keys(ed).length : 0;
+  if (!n) { bar.append(h('span', {}, '點預覽中的文字，可以直接修改這份文件的內容。')); return; }
+  bar.append(h('span', {}, '這份文件已修改 ', h('b', {}, n + ' 段'), '（標黃底線）'),
+    h('button', { class: 'btn small', onclick: () => saveTplVariant(cd) }, '另存為模板版本…'),
+    h('button', { class: 'btn small', onclick: async () => {
+      if (!await confirmBox('全部還原', `要把「${esc(cd.doc.name)}」修改過的 ${n} 段都還原成模板原本的文字嗎？`, '全部還原')) return;
+      delete S.cs.edits[cd.doc.id]; saveDraft(); } }, '全部還原'));
+}
+async function editPara(cd, idx) {
+  const pkg = await loadDocx((await tplBuffer(cd.file)).slice(0));
+  const p = bodyParas(pkg)[idx]; if (!p) return;
+  const orig = paraPlain(p), ed = docEdits(cd) || {}, edited = ed[idx] != null;
+  const ta = h('textarea', { style: 'width:100%;min-height:90px;font-size:15px;line-height:1.7;font-family:inherit;padding:8px' });
+  ta.value = edited ? ed[idx] : orig;
+  ta.rows = Math.min(14, Math.max(3, ta.value.split('\n').length + Math.ceil(ta.value.length / 38)));
+  const err = h('div', { class: 'ederr' });
+  const marks = t => [...t.matchAll(MARK)].map(m => m[0]);
+  const box = h('div', {},
+    h('p', { class: 'edhint' }, '大括號 ', h('code', {}, '{…}'), ' 是自動帶入的欄位或勾選框，請保留；只改括號以外的文字。改好按「套用」，預覽會馬上更新。'),
+    ta, err,
+    edited ? h('details', { style: 'margin-top:8px' }, h('summary', {}, '模板原本的文字'), h('pre', { style: 'white-space:pre-wrap;font-family:inherit;margin:6px 0 0;color:var(--sub)' }, orig)) : null);
+  for (;;) {
+    setTimeout(() => ta.focus(), 50);
+    const v = await modal('修改文字・' + cd.doc.name, box, [{ label: '取消', value: null }, ...(edited ? [{ label: '還原原文', value: 'reset' }] : []), { label: '套用', value: 'ok', primary: true }]);
+    if (!v) return;
+    let text = ta.value.replace(/\r/g, '');
+    if (v === 'reset') text = orig;
+    if (v === 'ok') {
+      if (/[{}]/.test(text.replace(MARK, ''))) { err.textContent = '大括號不成對，請檢查 { } 是否有少打或多打。'; continue; }
+      const lost = marks(orig).filter(m => !text.includes(m));
+      if (lost.length && !await confirmBox('刪掉了自動帶入的欄位', `修改後少了 <b>${esc([...new Set(lost)].join(' '))}</b>，這段就不會再自動帶入這些資料。<br>確定要這樣改嗎？`, '確定修改')) continue;
+      const known = new Set([...Object.keys(cd.info?.fields || {}), ...Object.keys(cd.info?.checks || {}).map(k => '□' + k)]);
+      const added = marks(text).filter(m => !marks(orig).includes(m) && !known.has(m.slice(1, -1).trim()) && !known.has('□' + parseCheck(m.slice(1, -1)).id));
+      if (added.length && !await confirmBox('新增了欄位標記', `新加的 <b>${esc([...new Set(added)].join(' '))}</b> 不是這份模板原有的欄位，表單上不會有地方可以填，產出時會是空白。<br>確定要這樣改嗎？`, '確定修改')) continue;
+    }
+    const all = S.cs.edits[cd.doc.id] && S.cs.edits[cd.doc.id].file === cd.file ? S.cs.edits[cd.doc.id] : (S.cs.edits[cd.doc.id] = { file: cd.file, paras: {} });
+    if (text === orig) delete all.paras[idx]; else all.paras[idx] = text;
+    if (!Object.keys(all.paras).length) delete S.cs.edits[cd.doc.id];
+    saveDraft();
+    return;
+  }
+}
+async function saveTplVariant(cd) {
+  const paras = docEdits(cd); if (!paras) return;
+  const doc = docById(cd.doc.id);
+  const inp = h('input', { type: 'text', style: 'width:100%', placeholder: '例如：倉儲用' });
+  const err = h('div', { class: 'ederr' });
+  const box = h('div', {},
+    h('p', {}, `把「${cd.doc.name}」修改後的內容存成新的模板版本。之後在第 5 步的「版本」就能選用，同事也看得到。`),
+    h('label', { class: 'f' }, h('span', {}, '版本名稱'), inp), err,
+    h('p', { class: 'muted', style: 'margin-top:8px' }, '大括號 {…} 的自動帶入欄位會保留，下次使用時會換成新案件的資料。'));
+  let label;
+  for (;;) {
+    setTimeout(() => inp.focus(), 50);
+    if (!await modal('另存為模板版本', box, [{ label: '取消', value: false }, { label: '存檔', value: true, primary: true }])) return;
+    label = inp.value.trim();
+    if (!label) err.textContent = '請輸入版本名稱。';
+    else if (BAD_CHARS.test(label)) err.textContent = '版本名稱不能包含這些符號：\\ / : * ? " < > |';
+    else if (doc.templates.some(t => t.label === label)) err.textContent = `「${cd.doc.name}」已經有「${label}」這個版本，請換一個名稱。`;
+    else break;
+  }
+  const base = cd.file.replace(/\.docx$/i, '').replace(/_template\s*$/i, '').trim();
+  const file = `${base}_${label}_template.docx`;
+  if (S.tplFiles.some(f => f.name.toLowerCase() === file.toLowerCase())) { await modal('檔名已存在', `templates 資料夾裡已經有「${esc(file)}」，請換一個版本名稱。`); return; }
+  const n = Object.keys(paras).length;
+  try {
+    const blob = await fillTemplate((await tplBuffer(cd.file)).slice(0), () => null, { edits: paras });
+    doc.templates.push({ label, file });
+    if (!await saveSettingsNow()) { const i = doc.templates.findIndex(t => t.file === file); if (i >= 0) doc.templates.splice(i, 1); return; }
+    await writeFile(await getSub(S.root, TPL_DIR, true), file, blob);
+    await scanTemplates();
+    const rec = S.settings.templates[file];
+    if (rec && rec.history[0]) { rec.history[0].note = `由「${cd.file}」另存，修改 ${n} 段`; await saveSettingsNow(); }
+    const d2 = docById(cd.doc.id), ti = d2 ? d2.templates.findIndex(t => t.file === file) : -1;
+    if (ti >= 0) S.cs.docChoices[cd.doc.id] = { ...(S.cs.docChoices[cd.doc.id] || { include: true }), tpl: ti };
+    delete S.cs.edits[cd.doc.id];
+    saveDraft(); render();
+    toast(`已另存為「${label}」版本，這個案件已改用新版本`, 4000);
+  } catch (e) { console.error(e); await modal('另存失敗', esc(e.message)); }
 }
 function updatePreviewNames() {
   document.querySelectorAll('td.fname').forEach(td => td.textContent = fileName(+td.dataset.no, S.cs.abbr || '〔縮寫〕', td.dataset.name, '.docx'));
@@ -1070,7 +1222,7 @@ async function generate() {
     const cd = docs[i], name = names[i];
     try {
       const f = await readFile(tdir, cd.file);
-      const blob = await fillTemplate(await f.arrayBuffer(), resolver(cd));
+      const blob = await fillTemplate(await f.arrayBuffer(), resolver(cd), { edits: docEdits(cd) });
       await writeFile(out, name, blob);
       const left = await leftoverMarks(blob);
       report.push(left.length ? { type: 'warn', text: `${name}：已產出，但還有未替換的標記 ${left.join(' ')}` } : { type: 'ok', text: `${name}：完成` });
@@ -1123,7 +1275,7 @@ async function loadOldCase() {
   try {
     const rec = JSON.parse(await (await readFile(dir, CASE_FILE)).text());
     if (!catById(rec.category)) await modal('類別已不存在', `這個案件原本的類別「${esc(rec.categoryName || '')}」已被刪除，請重新選擇類別。`);
-    S.cs = normalizeCase(Object.assign(blankCase(), { category: catById(rec.category) ? rec.category : '', abbr: rec.abbr || '', docChoices: rec.docChoices || {}, cl: rec.cl, needed: rec.needed || [], checks: rec.checks || {}, pairs: rec.pairs || {}, values: rec.values || {} }));
+    S.cs = normalizeCase(Object.assign(blankCase(), { category: catById(rec.category) ? rec.category : '', abbr: rec.abbr || '', docChoices: rec.docChoices || {}, cl: rec.cl, needed: rec.needed || [], checks: rec.checks || {}, pairs: rec.pairs || {}, edits: rec.edits || {}, values: rec.values || {} }));
     saveDraft(); S.tab = 'gen'; render(); toast(`已載入案件：${rec.abbr}（日期仍是當時的日期，需要可按「帶入今天」）`, 4000);
   } catch (e) { toast('讀取失敗：' + e.message); }
 }

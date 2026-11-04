@@ -22,7 +22,7 @@
   - `main.go`：本機服務（127.0.0.1:47321，隨機通行碼 `X-App-Token`）、設定檔、更新邏輯
   - `ui_windows.go`：視窗、選資料夾對話框；`ui_other.go`：Linux 開發測試用（不開視窗）
   - `build.sh`：編譯 `dist/FireReviewDocs.exe`（會把 HTML 複製成 `shell/app.html` 內嵌）
-- `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，29 項）
+- `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，45 項）
 - `.github/workflows/release.yml`：推送 `vX.Y` 標籤時自動編譯並建立 Release
 - `docs/`：給人看的說明；`CHANGELOG.md`：每次發布的更新說明（白話）
 
@@ -34,6 +34,12 @@
   - 只改 HTML：`APP_VERSION` 調升即可，使用者按「立即更新」後重新載入畫面。
   - 改了外殼（shell/）：要調升 `main.go` 的 `ShellVersion`，更新時會換 exe 並重新啟動。
 - 退回舊版的做法：把舊程式碼用**更高的版本號**重新發布（例如 v1.5 有問題 → 以 v1.4 的內容發布 v1.5.1），不要刪 Release。
+
+## 預覽改字與另存模板版本
+- 案件資料 `cs.edits = { 文件id: { file: 模板檔名, paras: { 段落編號: 新文字 } } }`；段落編號 = `word/document.xml` 裡 `w:p` 的順序（含表格內段落），只對同一個模板檔有效。
+- 新文字保留 `{欄位}` 標記，產出時先改字再帶入資料（`fillTemplate(buf, resolve, { edits })`）；`\t`=定位點、`\n`=換行，整段沿用第一段文字的格式；頁首頁尾不開放修改。
+- 預覽用 `{ tag: true }` 在每段開頭塞私用區字元編號（U+E000…），渲染後 `tagPreview()` 取出並移除。
+- 「另存為模板版本」寫成 `templates/<原名>_<版本名>_template.docx`，加進該文件的 `templates` 清單，案件改選新版本並清掉 edits。
 
 ## 版本與發布
 - 主程式版本號是 HTML 裡的 `const APP_VERSION = 'x.y'`（畫面右上角會顯示），改版時同步更新 CHANGELOG.md。
