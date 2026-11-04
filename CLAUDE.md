@@ -22,7 +22,7 @@
   - `main.go`：本機服務（127.0.0.1:47321，隨機通行碼 `X-App-Token`）、設定檔、更新邏輯
   - `ui_windows.go`：視窗、選資料夾對話框；`ui_other.go`：Linux 開發測試用（不開視窗）
   - `build.sh`：編譯 `dist/FireReviewDocs.exe`（會把 HTML 複製成 `shell/app.html` 內嵌）
-- `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，45 項）
+- `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，60 項）
 - `.github/workflows/release.yml`：main 上 CHANGELOG 出現有日期的新版本時，自動編譯並建立 Release
 - `docs/`：給人看的說明；`CHANGELOG.md`：每次發布的更新說明（白話）
 
@@ -40,6 +40,11 @@
 - 新文字保留 `{欄位}` 標記，產出時先改字再帶入資料（`fillTemplate(buf, resolve, { edits })`）；`\t`=定位點、`\n`=換行，整段沿用第一段文字的格式；頁首頁尾不開放修改。
 - 預覽用 `{ tag: true }` 在每段開頭塞私用區字元編號（U+E000…），渲染後 `tagPreview()` 取出並移除。
 - 「另存為模板版本」寫成 `templates/<原名>_<版本名>_template.docx`，加進該文件的 `templates` 清單，案件改選新版本並清掉 edits。
+
+## 我的案件（案件存檔與修正重新產出）
+- 清單存在系統資料夾 `案件紀錄\<使用者名稱>.json`（每人一份），每筆含 `id`（= 案件資料的 `caseId`）、資料夾名稱與路徑、完整案件資料快照。
+- 產出新案件後自動進入「修正模式」（`S.editing`，存在 localStorage `editingCase`）；修正模式下「產出」改走 `regenerate()`：比對 `diffCase()` → `affectReasons()` 預選受影響文件 → 舊檔移到 `_舊版\YYYYMMDD-HHmm\` → 更新 `outputs`（重產的加 `revisedAt`）與 `history`。
+- 修正模式下啟動時不把日期改成今天。
 
 ## 版本與發布
 - 主程式版本號是 HTML 裡的 `const APP_VERSION = 'x.y'`（畫面右上角會顯示），改版時同步更新 CHANGELOG.md。

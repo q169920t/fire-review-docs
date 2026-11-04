@@ -8,6 +8,7 @@ names = ['資料檢查表_template.docx', '圖說審查申請書_template.docx',
          '危險物品切結書_template.docx', '危險物品切結書_工廠版_template.docx', '建築圖切結書_template .docx']
 for n in names:
     d = docx.Document(); d.add_paragraph('工程名稱：{工程名稱}　地址：{建築地址}'); d.add_paragraph('{□新建}新建 {□增建}增建'); r = d.add_paragraph().add_run('第三段\t定位點'); r.bold = True
+    if n.startswith('委託書'): d.add_paragraph('受託人電話：{受託人電話}')
     d.save(os.path.join(W, 'root/templates', n))
 for i in range(2): open(os.path.join(W, f'scan/scan{i}.pdf'), 'wb').write(b'%PDF-1.4\n%test' + bytes([i]))
 s = open(APP, encoding='utf8').read()

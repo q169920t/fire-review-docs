@@ -69,6 +69,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check('顯示已修改段數', (await page.textContent('#pvedits')).includes('1 段'));
 
   // 4. 產出文件
+  await page.fill('#userName', '測試員'); await page.dispatchEvent('#userName', 'change');
   pick = path.join(W, 'case');
   await page.evaluate(() => {
     for (const f of S.settings.fields) S.cs.values[f.name] = S.cs.values[f.name] || ('測' + f.name);
@@ -117,6 +118,52 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check('案件改用新版本、修改已併入', after.tpl === 1 && !after.ed, JSON.stringify(after));
   await sleep(1200);
   check('新版本預覽沒有修改標記', (await page.$$('#pvbody p.pved')).length === 0 && (await page.textContent('#pvbody')).includes('本案名稱：'));
+
+  // 4c. 我的案件：產出後自動記錄、修正後只重新產出受影響的文件
+  const logF = path.join(W, 'root', '案件紀錄', '測試員.json');
+  check('產出後記入「我的案件」', fs.existsSync(logF) && JSON.parse(fs.readFileSync(logF, 'utf8')).cases.length === 1);
+  check('產出後進入修正模式', await page.isVisible('.editbar') && await page.isVisible('button:has-text("重新產出…")'));
+  const t01 = fs.statSync(path.join(W, 'case', '01城市倉儲-圖說審查申請書.docx')).mtimeMs;
+  await page.evaluate(() => { S.cs.values['受託人電話'] = '04-1234-5678'; saveDraft(); window.__gen = generate(); });
+  for (let i = 0; i < 6; i++) {
+    await sleep(700);
+    if (await page.isVisible('.modal .hd:has-text("重新產出・")')) break;
+    const b = await page.$('.modal .ft .btn.primary'); if (b) await b.click();
+  }
+  const rg = await page.textContent('.modal').catch(() => '');
+  check('列出修改內容', rg.includes('受託人電話') && rg.includes('04-1234-5678'));
+  const checked = await page.$$eval('.modal tbody input[type=checkbox]', a => a.map(x => x.checked));
+  check('只預選受影響的文件', checked.filter(Boolean).length === 1 && checked.length === 5, JSON.stringify(checked));
+  await page.click('.modal .btn.primary:has-text("重新產出勾選的文件")');
+  await page.waitForSelector('.modal .hd:has-text("重新產出結果")', { timeout: 10000 });
+  await page.click('.modal button:has-text("關閉")');
+  const old = fs.readdirSync(path.join(W, 'case', '_舊版'));
+  const oldFiles = old.length ? fs.readdirSync(path.join(W, 'case', '_舊版', old[0])) : [];
+  check('舊檔備份到 _舊版', oldFiles.includes('08城市倉儲-委託書.docx') && oldFiles.includes('案件資料.json'), oldFiles.join(','));
+  const nx = require('child_process').execSync(`unzip -p "${path.join(W, 'case', '08城市倉儲-委託書.docx')}" word/document.xml`).toString();
+  check('重新產出的文件有新資料', nx.includes('04-1234-5678') && nx.includes('本案名稱：'));
+  check('沒受影響的文件沒有重新產出', fs.statSync(path.join(W, 'case', '01城市倉儲-圖說審查申請書.docx')).mtimeMs === t01);
+  const rec2 = JSON.parse(fs.readFileSync(path.join(W, 'case', '案件資料.json'), 'utf8'));
+  check('記錄修改歷程', rec2.history.length === 1 && rec2.history[0].changes.some(c => c.label === '受託人電話' && c.to === '04-1234-5678') && rec2.history[0].by === '測試員');
+  check('其他文件的產出紀錄保留', rec2.outputs.length === 5 && rec2.outputs.find(o => o.docId === 'd08').revisedAt && !rec2.outputs.find(o => o.docId === 'd01').revisedAt);
+  check('用印檢查表標示修正重印', fs.readFileSync(path.join(W, 'case', '用印檢查表.html'), 'utf8').includes('修正重印'));
+  check('案件清單更新修正次數', JSON.parse(fs.readFileSync(logF, 'utf8')).cases[0].revisions === 1);
+
+  // 4d. 清空後從「我的案件」打開
+  await page.evaluate(() => { endEditing(); S.cs = blankCase(); saveDraft(); S.tab = 'cases'; render(); });
+  await page.waitForSelector('#main tbody tr', { timeout: 5000 });
+  check('案件清單列出案件', (await page.textContent('#main tbody')).includes('城市倉儲新建工程'));
+  await page.fill('#main input[type=text]', '找不到的字'); await sleep(200);
+  check('搜尋可以篩選', (await page.$$('#main tbody tr')).length === 0);
+  await page.fill('#main input[type=text]', '倉儲'); await sleep(200);
+  await page.click('#main tbody button:has-text("打開修正")');
+  await page.click('.modal .btn.primary:has-text("打開")'); await sleep(1200);
+  const reo = await page.evaluate(() => ({ tab: S.tab, tel: S.cs.values['受託人電話'], ed: !!S.editing, y: S.cs.values['年份'] }));
+  check('打開後資料帶回、進入修正模式', reo.tab === 'gen' && reo.tel === '04-1234-5678' && reo.ed && await page.isVisible('.editbar'), JSON.stringify(reo));
+  await page.evaluate(() => { S.cs.values['年份'] = '100'; saveDraft(); }); await sleep(300);
+  await page.reload(); await sleep(1500);
+  const rl = await page.evaluate(() => ({ ed: !!S.editing, y: S.cs.values['年份'] }));
+  check('重開程式仍在修正模式、日期不會被改成今天', rl.ed && rl.y === '100', JSON.stringify(rl));
 
   // 5. 掃描檔：讀、寫、刪、同資料夾判斷
   const r5 = await page.evaluate(async (dir) => {

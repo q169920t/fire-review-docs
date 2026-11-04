@@ -105,6 +105,9 @@ span.pvval{color:#0b57d0}
 .edhint{font-size:13px;color:var(--sub);margin:0 0 8px;line-height:1.6}
 .edhint code{color:#0b57d0}
 .ederr{color:var(--err);font-size:13px;margin-top:6px}
+.editbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--warn-soft);border:1px solid #f0d58a;border-radius:var(--radius);padding:10px 14px;margin-bottom:12px}
+.chglist{margin:6px 0 10px;padding-left:20px;max-height:180px;overflow:auto;font-size:14px}
+.chglist del{color:var(--err)}.chglist ins{color:var(--ok);text-decoration:none;font-weight:600}
 .cltable{font-family:"標楷體","DFKai-SB","Microsoft JhengHei",serif;font-size:15px;border:2px solid #222}
 .cltable th,.cltable td{border:1px solid #444;padding:6px 6px;vertical-align:middle}
 .cltable th{background:#f1f1f1;color:#222;text-align:center;font-size:15px}
@@ -159,7 +162,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const SETTINGS_FILE = '系統設定.json';
 const CASE_FILE = '案件資料.json';
-const APP_VERSION = '1.5';
+const APP_VERSION = '1.6';
 const TPL_DIR = 'templates';
 const BAD_CHARS = /[\\/:*?"<>|]/;
 const $ = s => document.querySelector(s);
@@ -711,7 +714,8 @@ async function openRoot(handle, auto) {
     await loadSettings();
     await scanTemplates();
     S.cs = normalizeCase(Object.assign(blankCase(), ls.get('draftCase', {})));
-    S.cs.values = Object.assign({}, S.cs.values, rocToday());
+    S.editing = ls.get('editingCase', null);
+    if (!S.editing) S.cs.values = Object.assign({}, S.cs.values, rocToday());   // 修正舊案件時保留原本的日期
     if (!S.cs.category && S.settings.categories[0]) selectCategory(S.settings.categories[0].id, true);
     $('#welcome').innerHTML = ''; $('#layout').style.display = 'flex';
     $('#rootName').textContent = '系統資料夾：' + handle.name;
@@ -723,7 +727,7 @@ async function openRoot(handle, auto) {
 
 /* ==================== 畫面框架 ==================== */
 const TABS = [
-  ['案件作業', [['gen', '① 文件產出'], ['scan', '② 掃描檔改名']]],
+  ['案件作業', [['gen', '① 文件產出'], ['scan', '② 掃描檔改名'], ['cases', '③ 我的案件']]],
   ['系統設定', [['cats', '案件類別'], ['docs', '文件設定'], ['tpls', '模板與版本'], ['profiles', '常用資料'], ['fields', '欄位與勾選框']]],
   ['其他', [['help', '使用說明']]]
 ];
@@ -734,7 +738,7 @@ function render() {
     for (const [id, label] of items) nav.append(h('button', { class: S.tab === id ? 'on' : '', onclick: () => { S.tab = id; render(); } }, label));
   }
   const main = $('#main'); const y = main.scrollTop; main.innerHTML = '';
-  ({ gen: viewGen, scan: viewScan, cats: viewCats, docs: viewDocs, tpls: viewTpls, profiles: viewProfiles, fields: viewFields, help: viewHelp })[S.tab](main);
+  ({ gen: viewGen, scan: viewScan, cases: viewCases, cats: viewCats, docs: viewDocs, tpls: viewTpls, profiles: viewProfiles, fields: viewFields, help: viewHelp })[S.tab](main);
   main.scrollTop = y;
 }
 
@@ -944,9 +948,17 @@ function viewGen(main) {
   main.append(h('h2', {}, '文件產出'), h('p', { class: 'lead' }, '依序填寫各步驟，右側會即時顯示目前步驟的文件內容（黃底＝還沒填的欄位，藍字＝已帶入的資料）。'));
   const left = h('div', {}), right = h('div', { class: 'pvpane', id: 'pvpane' });
   main.append(h('div', { class: 'genwrap' }, left, right));
+  const ed = S.editing;
+  if (ed) left.append(h('div', { class: 'editbar' },
+    h('span', {}, '正在修正：', h('b', {}, ed.abbr || '（未命名）'), h('span', { class: 'muted' }, `（${ed.folder || ''}，上次產出 ${ed.at ? rocStamp(ed.at) : ''}）`)),
+    h('span', { class: 'muted' }, '改好後按第 5 步的「重新產出」，會存回原本的資料夾。'),
+    h('button', { class: 'btn small', onclick: async () => {
+      if (!await confirmBox('改為新案件', '保留目前填好的資料，但當成一個<b>新案件</b>，產出時會請你選擇新的案件資料夾。<br>原本的案件不受影響。', '改為新案件')) return;
+      endEditing(); delete S.cs.caseId; saveDraft(); render(); } }, '改為新案件（保留資料）')));
   left.append(h('div', { class: 'card' }, h('div', { class: 'row' },
-    h('button', { class: 'btn', onclick: loadOldCase }, '載入舊案件'),
-    h('button', { class: 'btn', onclick: async () => { if (await confirmBox('清空表單', '確定要清空目前填寫的資料，開始新案件嗎？')) { const c = cs.category; S.cs = blankCase(); if (c) selectCategory(c); saveDraft(); render(); } } }, '新案件（清空）'),
+    h('button', { class: 'btn', onclick: () => { S.tab = 'cases'; render(); } }, '我的案件…'),
+    h('button', { class: 'btn', onclick: loadOldCase }, '從資料夾載入'),
+    h('button', { class: 'btn', onclick: async () => { if (await confirmBox('清空表單', '確定要清空目前填寫的資料，開始新案件嗎？' + (S.editing ? '<br>（已產出的案件不受影響，之後可從「我的案件」再打開。）' : ''))) { const c = cs.category; endEditing(); S.cs = blankCase(); if (c) selectCategory(c); saveDraft(); render(); } } }, '新案件（清空）'),
     cat ? h('span', { class: 'muted' }, '類別：', h('b', {}, cat.name)) : null)));
   const pvSteps = [];
   const addCard = (card, title, docs) => { card.dataset.step = pvSteps.length; pvSteps.push({ title, docs }); card.addEventListener('focusin', () => setPvStep(+card.dataset.step)); card.addEventListener('click', () => setPvStep(+card.dataset.step)); left.append(card); };
@@ -1002,8 +1014,8 @@ function viewGen(main) {
   const res = h('div', { id: 'checkResult', style: 'margin-top:14px' });
   c5.append(res, h('div', { class: 'row', style: 'margin-top:10px' },
     h('button', { class: 'btn', onclick: () => { res.innerHTML = ''; res.append(msgList(validateCase())); } }, '檢查資料'),
-    h('button', { class: 'btn primary', onclick: generate }, '產出文件…'),
-    h('span', { class: 'muted' }, '按「產出文件」後，選擇要存放的案件資料夾。')));
+    h('button', { class: 'btn primary', onclick: generate }, S.editing ? '重新產出…' : '產出文件…'),
+    h('span', { class: 'muted' }, S.editing ? '會先列出修改了什麼、影響哪幾份文件，確認後存回原本的案件資料夾；被取代的檔案會備份到「_舊版」。' : '按「產出文件」後，選擇要存放的案件資料夾。')));
   addCard(c5, '全部文件', cat ? caseDocs().filter(x => x.include) : []);
   PV.steps = pvSteps;
   if (PV.step >= pvSteps.length) PV.step = 0;
@@ -1211,8 +1223,10 @@ async function generate() {
   if (msgs.some(m => m.type === 'err')) { toast('有錯誤需要先修正'); return; }
   const warns = msgs.filter(m => m.type === 'warn');
   if (warns.length && !await confirmBox('有需要注意的地方', h('div', {}, msgList(warns), h('p', {}, '仍要繼續產出嗎？')), '仍要產出')) return;
+  if (S.editing) return regenerate();
   const out = await pickDir('caseOut'); if (!out) return;
   const docs = caseDocs().filter(x => x.include), cs = S.cs;
+  cs.caseId = uid() + uid();
   const names = docs.map(cd => fileName(cd.doc.no, cs.abbr, cd.doc.name, '.docx'));
   const exist = []; for (const n of names) if (await fileExists(out, n)) exist.push(n);
   if (exist.length && !await confirmBox('檔案已存在', h('div', {}, h('p', {}, `「${out.name}」裡已經有這些檔案：`), msgList(exist.map(t => ({ type: 'warn', text: t }))), h('p', {}, '要覆蓋嗎？')), '覆蓋')) return;
@@ -1229,10 +1243,14 @@ async function generate() {
       outputs.push({ docId: cd.doc.id, no: cd.doc.no, name: cd.doc.name, file: name, template: cd.file, templateTime: f.lastModified, stamps: cd.doc.stamps });
     } catch (e) { report.push({ type: 'err', text: `${name}：失敗（${e.message}）` }); }
   }
-  const record = { app: '消防審勘文件管理', savedAt: Date.now(), savedBy: userName(), categoryName: catById(cs.category)?.name, ...clone(cs), outputs };
-  try { await writeFile(out, CASE_FILE, JSON.stringify(record, null, 2)); report.push({ type: 'info', text: `已儲存 ${CASE_FILE}（之後可「載入舊案件」或做掃描改名）` }); } catch (e) { report.push({ type: 'err', text: '案件資料儲存失敗：' + e.message }); }
+  const now = Date.now();
+  const record = { app: '消防審勘文件管理', createdAt: now, savedAt: now, savedBy: userName(), categoryName: catById(cs.category)?.name, ...clone(cs), outputs, history: [] };
+  try { await writeFile(out, CASE_FILE, JSON.stringify(record, null, 2)); report.push({ type: 'info', text: `已儲存 ${CASE_FILE}（可做掃描改名）` }); } catch (e) { report.push({ type: 'err', text: '案件資料儲存失敗：' + e.message }); }
   const sheet = stampSheetHtml(record);
   try { await writeFile(out, '用印檢查表.html', sheet); report.push({ type: 'info', text: '已儲存 用印檢查表.html' }); } catch {}
+  try { await logCase(out, record); report.push({ type: 'info', text: '已記入「我的案件」，之後發現資料填錯可以直接打開修正' }); } catch (e) { report.push({ type: 'warn', text: '記入「我的案件」失敗：' + e.message }); }
+  startEditing(record, out, userName());
+  saveDraft(); render();
   const go = await modal('產出結果', h('div', {}, h('p', {}, `存放位置：${out.name}`), msgList(report)),
     [{ label: '關閉', value: false }, ...(NATIVE ? [{ label: '開啟資料夾', value: 'open' }] : []), { label: '列印用印檢查表', value: true, primary: true }]);
   if (go === 'open') nativeOpenFolder(out);
@@ -1243,7 +1261,7 @@ async function generate() {
 function stampSheetHtml(rec) {
   const roles = S.settings.roles;
   const rows = rec.outputs.filter(o => o.stamps && o.stamps.length).map(o =>
-    `<tr><td>${pad2(o.no)}</td><td>${esc(o.name)}</td>${roles.map(r => `<td class="c">${o.stamps.includes(r) ? '☐' : '—'}</td>`).join('')}<td></td></tr>`).join('');
+    `<tr><td>${pad2(o.no)}</td><td>${esc(o.name)}</td>${roles.map(r => `<td class="c">${o.stamps.includes(r) ? '☐' : '—'}</td>`).join('')}<td>${o.revisedAt ? esc(rocStamp(o.revisedAt).split(' ')[0]) + ' 修正重印' : ''}</td></tr>`).join('');
   const v = rec.values || {};
   return `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>用印檢查表－${esc(rec.abbr)}</title><style>
 body{font-family:"標楷體","DFKai-SB","Microsoft JhengHei",serif;margin:28px 36px;color:#000}
@@ -1274,10 +1292,193 @@ async function loadOldCase() {
   if (!await fileExists(dir, CASE_FILE)) { await modal('找不到案件資料', `「${esc(dir.name)}」裡沒有 ${CASE_FILE}。<br>只有用本軟體產出過文件的資料夾才能載入。`); return; }
   try {
     const rec = JSON.parse(await (await readFile(dir, CASE_FILE)).text());
-    if (!catById(rec.category)) await modal('類別已不存在', `這個案件原本的類別「${esc(rec.categoryName || '')}」已被刪除，請重新選擇類別。`);
-    S.cs = normalizeCase(Object.assign(blankCase(), { category: catById(rec.category) ? rec.category : '', abbr: rec.abbr || '', docChoices: rec.docChoices || {}, cl: rec.cl, needed: rec.needed || [], checks: rec.checks || {}, pairs: rec.pairs || {}, edits: rec.edits || {}, values: rec.values || {} }));
-    saveDraft(); S.tab = 'gen'; render(); toast(`已載入案件：${rec.abbr}（日期仍是當時的日期，需要可按「帶入今天」）`, 4000);
+    if (!rec.caseId) rec.caseId = uid() + uid();   // 舊版產出的案件沒有編號
+    await applyRecord(rec);
+    startEditing(rec, dir, await findCaseOwner(rec.caseId) || rec.savedBy || userName());
+    saveDraft(); S.tab = 'gen'; render(); toast(`已打開案件：${rec.abbr}，改好後按「重新產出」`, 4000);
   } catch (e) { toast('讀取失敗：' + e.message); }
+}
+
+/* ==================== ③ 我的案件（案件存檔、修正後重新產出） ==================== */
+const LOG_DIR = '案件紀錄';
+const logFileName = u => String(u).replace(/[\\/:*?"<>|]/g, '_') + '.json';
+async function applyRecord(rec) {
+  if (!catById(rec.category)) await modal('類別已不存在', `這個案件原本的類別「${esc(rec.categoryName || '')}」已被刪除，請重新選擇類別。`);
+  S.cs = normalizeCase(Object.assign(blankCase(), { caseId: rec.caseId, category: catById(rec.category) ? rec.category : '', abbr: rec.abbr || '', docChoices: rec.docChoices || {}, cl: rec.cl, needed: rec.needed || [], checks: rec.checks || {}, pairs: rec.pairs || {}, edits: rec.edits || {}, values: rec.values || {} }));
+}
+function startEditing(rec, dir, owner) {
+  S.editing = { id: rec.caseId, owner, abbr: rec.abbr, folder: dir.name, path: dir.path || '', at: rec.savedAt };
+  ls.set('editingCase', S.editing);
+}
+function endEditing() { S.editing = null; ls.set('editingCase', null); }
+async function readJson(dir, name) { try { return JSON.parse(await (await readFile(dir, name)).text()); } catch { return null; } }
+async function loadLogs(all) {
+  const dir = await getSub(S.root, LOG_DIR); if (!dir) return [];
+  const names = all ? await listFiles(dir, /\.json$/i) : [logFileName(userName())];
+  const out = [];
+  for (const n of names) {
+    const log = await readJson(dir, n); if (!log || !Array.isArray(log.cases)) continue;
+    for (const c of log.cases) out.push({ ...c, owner: log.user || n.replace(/\.json$/i, '') });
+  }
+  return out.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+}
+async function findCaseOwner(id) { try { return (await loadLogs(true)).find(c => c.id === id)?.owner || null; } catch { return null; } }
+// 把案件記到（或更新到）負責人的清單；每人一個檔案：案件紀錄\使用者名稱.json
+async function logCase(dir, record, owner) {
+  const ldir = await getSub(S.root, LOG_DIR, true);
+  const user = owner || userName(), name = logFileName(user);
+  const log = (await readJson(ldir, name)) || { user, cases: [] };
+  const entry = { id: record.caseId, abbr: record.abbr, title: record.values?.工程名稱 || '', categoryName: record.categoryName || '',
+    folder: dir.name, path: dir.path || '', createdAt: record.createdAt || record.savedAt, updatedAt: record.savedAt, by: record.savedBy,
+    revisions: (record.history || []).length, record };
+  const i = log.cases.findIndex(c => c.id === entry.id);
+  if (i >= 0) log.cases[i] = entry; else log.cases.unshift(entry);
+  log.cases.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  await writeFile(ldir, name, JSON.stringify(log, null, 1));
+}
+function viewCases(main) {
+  main.append(h('h2', {}, '我的案件'),
+    h('p', { class: 'lead' }, '每次產出文件都會自動記在這裡。發現資料填錯時，按「打開修正」，改好後按「重新產出」，就會存回原本的案件資料夾。'));
+  if (userName() === '未署名') main.append(h('div', { class: 'card', style: 'background:var(--warn-soft)' }, '右上角還沒填使用者名稱，案件會記在「未署名」底下。請先填上你的名字。'));
+  const q = h('input', { type: 'text', placeholder: '搜尋工程名稱、縮寫、資料夾…', style: 'flex:1;min-width:220px', value: S.caseQ || '' });
+  const all = h('input', { type: 'checkbox', checked: !!S.caseAll });
+  const tb = h('tbody'), info = h('p', { class: 'muted' }, '讀取中…');
+  const card = h('div', { class: 'card' },
+    h('div', { class: 'row', style: 'margin-bottom:10px' }, q, h('label', { class: 'row', style: 'gap:6px' }, all, '顯示所有人的案件')),
+    info, h('div', { style: 'overflow-x:auto' }, h('table', {}, h('thead', {}, h('tr', {}, ['工程名稱', '縮寫', '類別', '案件資料夾', '最後產出', '修正', '', ''].map(t => h('th', {}, t)))), tb)));
+  main.append(card);
+  let list = [];
+  const draw = () => {
+    const k = (S.caseQ || '').trim().toLowerCase();
+    const rows = list.filter(c => !k || [c.title, c.abbr, c.folder, c.categoryName, c.owner].some(x => String(x || '').toLowerCase().includes(k)));
+    tb.innerHTML = '';
+    info.textContent = list.length ? `共 ${list.length} 件${k ? `，符合搜尋的有 ${rows.length} 件` : ''}` : '還沒有案件紀錄。產出文件後，案件會自動出現在這裡。';
+    for (const c of rows) tb.append(h('tr', {},
+      h('td', {}, c.title || '—'), h('td', {}, c.abbr || ''), h('td', {}, c.categoryName || ''),
+      h('td', { class: 'mono', title: c.path || '' }, c.folder || ''),
+      h('td', {}, c.updatedAt ? rocStamp(c.updatedAt) : '', h('div', { class: 'muted' }, c.by || '')),
+      h('td', {}, c.revisions ? c.revisions + ' 次' : '—'),
+      h('td', { class: 'muted' }, S.caseAll ? c.owner : ''),
+      h('td', {}, h('button', { class: 'btn small primary', onclick: () => openLoggedCase(c) }, S.editing && S.editing.id === c.id ? '繼續修正' : '打開修正'))));
+  };
+  q.addEventListener('input', () => { S.caseQ = q.value; draw(); });
+  all.addEventListener('change', async () => { S.caseAll = all.checked; info.textContent = '讀取中…'; list = await loadLogs(S.caseAll).catch(() => []); draw(); });
+  loadLogs(S.caseAll).then(l => { list = l; draw(); }).catch(e => { info.textContent = '讀取失敗：' + e.message; });
+}
+async function openLoggedCase(c) {
+  if (!(S.editing && S.editing.id === c.id) && !await confirmBox('打開案件', `要打開「${esc(c.abbr || c.title)}」進行修正嗎？<br>目前表單上的資料會被這個案件取代。`, '打開')) return;
+  let rec = c.record, dir = null;
+  if (NATIVE && c.path) {   // 優先讀案件資料夾裡最新的案件資料
+    try { const d = new NDir(c.path); const r = await readJson(d, CASE_FILE); if (r && (!r.caseId || r.caseId === c.id)) { rec = r; dir = d; } } catch {}
+  }
+  if (!rec) { toast('這筆紀錄沒有案件資料'); return; }
+  rec = { ...rec, caseId: c.id };
+  await applyRecord(rec);
+  startEditing(rec, dir || { name: c.folder, path: c.path }, c.owner);
+  saveDraft(); S.tab = 'gen'; render();
+  toast(`已打開「${c.abbr}」，改好後按第 5 步的「重新產出」`, 4000);
+}
+// 比對修改前後
+function diffCase(prev, cs) {
+  const out = [], str = v => String(v ?? '');
+  const keys = o => Object.keys(o || {});
+  for (const k of new Set([...keys(prev.values), ...keys(cs.values)])) if (str(prev.values?.[k]) !== str(cs.values[k])) out.push({ kind: 'field', key: k, label: k, from: str(prev.values?.[k]), to: str(cs.values[k]) });
+  for (const k of new Set([...keys(prev.checks), ...keys(cs.checks)])) if (!!prev.checks?.[k] !== !!cs.checks[k]) out.push({ kind: 'check', key: k, label: '勾選「' + k + '」', from: prev.checks?.[k] ? '■' : '□', to: cs.checks[k] ? '■' : '□' });
+  for (const k of new Set([...keys(prev.pairs), ...keys(cs.pairs)])) if (str(prev.pairs?.[k] || '無') !== str(cs.pairs[k] || '無')) out.push({ kind: 'pair', key: k, label: '檢附「' + k + '」', from: prev.pairs?.[k] || '無', to: cs.pairs[k] || '無' });
+  for (const k of new Set([...keys(prev.cl), ...keys(cs.cl)])) if ((prev.cl?.[k] || '不須') !== (cs.cl[k] || '不須')) out.push({ kind: 'cl', key: k, label: '資料檢查表第 ' + k + ' 項', from: prev.cl?.[k] || '不須', to: cs.cl[k] || '不須' });
+  if (str(prev.abbr) !== str(cs.abbr)) out.push({ kind: 'abbr', key: 'abbr', label: '工程名稱縮寫', from: str(prev.abbr), to: str(cs.abbr) });
+  if (str(prev.category) !== str(cs.category)) out.push({ kind: 'cat', key: 'category', label: '案件類別', from: prev.categoryName || '', to: catById(cs.category)?.name || '' });
+  for (const k of new Set([...keys(prev.edits), ...keys(cs.edits)])) if (JSON.stringify(prev.edits?.[k] || null) !== JSON.stringify(cs.edits[k] || null)) out.push({ kind: 'edit', key: k, label: '「' + (docById(k)?.name || k) + '」改字內容', from: '', to: '' });
+  for (const k of new Set([...keys(prev.docChoices), ...keys(cs.docChoices)])) if ((prev.docChoices?.[k]?.tpl || 0) !== (cs.docChoices[k]?.tpl || 0)) out.push({ kind: 'tpl', key: k, label: '「' + (docById(k)?.name || k) + '」模板版本', from: '', to: '' });
+  return out;
+}
+// 這份文件為什麼要重新產出
+function affectReasons(cd, changes, po) {
+  if (!po) return { why: ['這次新加入的文件'], pre: true };
+  const why = [], ci = checkInputMap(), f = cd.info?.fields || {}, ck = cd.info?.checks || {};
+  for (const c of changes) {
+    if (c.kind === 'field' && (f[c.key] || Object.entries(ci).some(([chk, fld]) => fld === c.key && ck[chk]))) why.push(c.label);
+    else if (c.kind === 'check' && ck[c.key]) why.push(c.label);
+    else if (c.kind === 'pair' && (ck['有-' + c.key] || ck['無-' + c.key])) why.push(c.label);
+    else if (c.kind === 'cl' && cd.doc.checklist) why.push(c.label);
+    else if (c.kind === 'abbr') why.push('檔名改變');
+    else if ((c.kind === 'edit' || c.kind === 'tpl') && c.key === cd.doc.id) why.push(c.label);
+  }
+  if (po.template && po.template !== cd.file && !why.some(w => w.includes('模板版本'))) why.push('模板版本');
+  const pre = why.length > 0;
+  const mt = S.tplFiles.find(x => x.name === cd.file)?.lastModified;
+  if (po.templateTime && mt && po.templateTime !== mt) why.push('模板檔在上次產出後有更新');
+  return { why: [...new Set(why)], pre };
+}
+async function regenerate() {
+  const ed = S.editing, cs = S.cs;
+  let out = null;
+  if (NATIVE && ed.path) { try { const st = await nat.json('GET', '/api/stat' + nat.q(ed.path)); if (st.exists && st.dir) out = new NDir(ed.path); } catch {} }
+  if (!out) {
+    if (!await confirmBox('選擇案件資料夾', NATIVE ? `找不到原本的案件資料夾「${esc(ed.folder)}」（可能被移動或改名），請重新選擇。` : `請選擇這個案件的資料夾「${esc(ed.folder)}」。`, '選擇')) return;
+    out = await pickDir('caseOut'); if (!out) return;
+  }
+  const prev = await readJson(out, CASE_FILE);
+  if (!prev) { await modal('找不到案件資料', `「${esc(out.name)}」裡沒有 ${CASE_FILE}，無法比對修改了什麼。<br>請確認資料夾是否正確；若要當作新案件產出，請先按上方的「改為新案件」。`); return; }
+  if (prev.caseId && cs.caseId && prev.caseId !== cs.caseId && !await confirmBox('資料夾裡是另一個案件', `「${esc(out.name)}」裡的案件是「${esc(prev.abbr)}」，不是目前修正的「${esc(cs.abbr)}」。<br>確定要覆蓋嗎？`, '仍要覆蓋')) return;
+  const changes = diffCase(prev, cs);
+  const docs = caseDocs().filter(x => x.include);
+  const prevOut = Object.fromEntries((prev.outputs || []).map(o => [o.docId, o]));
+  const rows = docs.map(cd => ({ cd, ...affectReasons(cd, changes, prevOut[cd.doc.id]) }));
+  rows.forEach(r => r.cb = h('input', { type: 'checkbox', checked: r.pre }));
+  const short = t => t.length > 40 ? t.slice(0, 40) + '…' : t;
+  const box = h('div', {},
+    changes.length
+      ? h('div', {}, h('b', {}, `修改了 ${changes.length} 處：`), h('ul', { class: 'chglist' }, changes.map(c => h('li', {}, c.label,
+          c.from || c.to ? h('span', {}, '：', h('del', {}, short(c.from) || '（空白）'), ' → ', h('ins', {}, short(c.to) || '（空白）')) : null))))
+      : h('p', {}, '資料和上次產出時一樣，沒有修改。如果仍要重新產出，請自己勾選文件。'),
+    h('div', { class: 'row', style: 'justify-content:space-between;margin-top:6px' }, h('b', {}, '要重新產出的文件：'),
+      h('span', { class: 'row', style: 'gap:6px' },
+        h('button', { class: 'btn small', onclick: () => rows.forEach(r => r.cb.checked = true) }, '全部重新產出'),
+        h('button', { class: 'btn small', onclick: () => rows.forEach(r => r.cb.checked = r.pre) }, '只選受影響的'))),
+    h('table', { style: 'margin-top:6px' }, h('tbody', {}, rows.map(r => h('tr', {},
+      h('td', {}, r.cb), h('td', { class: 'mono' }, fileName(r.cd.doc.no, cs.abbr, r.cd.doc.name, '.docx')),
+      h('td', { class: r.pre ? '' : 'muted', style: 'font-size:13px' }, r.why.length ? r.why.join('、') : '沒有受影響'))))),
+    h('p', { class: 'muted', style: 'margin-top:10px' }, '重新產出的文件如果已經用過印，需要重新用印；用印檢查表會標示「修正重印」。被取代的舊檔會移到案件資料夾的「_舊版」。'));
+  if (!await modal('重新產出・' + (cs.abbr || ''), box, [{ label: '取消', value: false }, { label: '重新產出勾選的文件', value: true, primary: true }])) return;
+  const sel = rows.filter(r => r.cb.checked);
+  if (!sel.length) { toast('沒有勾選任何文件'); return; }
+  const now = Date.now(), d = new Date(now);
+  const stamp = `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}`;
+  let bdir = null; const backedUp = [];
+  const backup = async name => {
+    if (!name || !await fileExists(out, name)) return;
+    if (!bdir) bdir = await getSub(await getSub(out, '_舊版', true), stamp, true);
+    await writeFile(bdir, name, await readFile(out, name)); await out.removeEntry(name); backedUp.push(name);
+  };
+  const report = [], tdir = await getSub(S.root, TPL_DIR), newOut = {};
+  try { await backup(CASE_FILE); await backup('用印檢查表.html'); } catch (e) { report.push({ type: 'warn', text: '舊的案件資料備份失敗：' + e.message }); }
+  for (const r of sel) {
+    const cd = r.cd, name = fileName(cd.doc.no, cs.abbr, cd.doc.name, '.docx'), po = prevOut[cd.doc.id];
+    try {
+      for (const n of new Set([po && po.file, name])) await backup(n);
+      const f = await readFile(tdir, cd.file);
+      const blob = await fillTemplate(await f.arrayBuffer(), resolver(cd), { edits: docEdits(cd) });
+      await writeFile(out, name, blob);
+      const left = await leftoverMarks(blob);
+      report.push(left.length ? { type: 'warn', text: `${name}：已重新產出，但還有未替換的標記 ${left.join(' ')}` } : { type: 'ok', text: `${name}：已重新產出` });
+      newOut[cd.doc.id] = { docId: cd.doc.id, no: cd.doc.no, name: cd.doc.name, file: name, template: cd.file, templateTime: f.lastModified, stamps: cd.doc.stamps, revisedAt: now };
+    } catch (e) { report.push({ type: 'err', text: `${name}：失敗（${e.message}）` }); }
+  }
+  const outputs = docs.map(cd => newOut[cd.doc.id] || prevOut[cd.doc.id]).filter(Boolean);
+  const record = { ...clone(prev), app: '消防審勘文件管理', createdAt: prev.createdAt || prev.savedAt, savedAt: now, savedBy: userName(), categoryName: catById(cs.category)?.name, ...clone(cs), outputs,
+    history: [...(prev.history || []), { at: now, by: userName(), changes: changes.map(c => ({ label: c.label, from: c.from, to: c.to })), docs: Object.values(newOut).map(o => o.file) }] };
+  try { await writeFile(out, CASE_FILE, JSON.stringify(record, null, 2)); report.push({ type: 'info', text: `已更新 ${CASE_FILE}（含這次的修改紀錄）` }); } catch (e) { report.push({ type: 'err', text: '案件資料儲存失敗：' + e.message }); }
+  const sheet = stampSheetHtml(record);
+  try { await writeFile(out, '用印檢查表.html', sheet); report.push({ type: 'info', text: '已更新 用印檢查表.html（重新產出的文件標示「修正重印」）' }); } catch {}
+  if (backedUp.length) report.push({ type: 'info', text: `舊檔已備份到 _舊版\\${stamp}（${backedUp.length} 個檔案）` });
+  try { await logCase(out, record, ed.owner); } catch (e) { report.push({ type: 'warn', text: '更新「我的案件」失敗：' + e.message }); }
+  startEditing(record, out, ed.owner);
+  saveDraft(); render();
+  const go = await modal('重新產出結果', h('div', {}, h('p', {}, `存放位置：${out.name}`), msgList(report)),
+    [{ label: '關閉', value: false }, ...(NATIVE ? [{ label: '開啟資料夾', value: 'open' }] : []), { label: '列印用印檢查表', value: true, primary: true }]);
+  if (go === 'open') nativeOpenFolder(out);
+  else if (go) printHtml(sheet);
 }
 
 /* ==================== ② 掃描檔改名 ==================== */
@@ -1592,6 +1793,7 @@ function viewHelp(main) {
 <li>系統會在案件資料夾產出所有 Word 檔、<span class="kbd">${CASE_FILE}</span>（案件紀錄）和 <span class="kbd">用印檢查表.html</span>。</li>
 <li>列印、用印後掃描，每份文件存成一個 PDF。</li>
 <li><b>掃描檔改名</b>：選案件資料夾 → 選掃描檔資料夾 → 逐一預覽並選擇對應文件 → 「改名並存放」。</li>
+<li><b>發現資料填錯</b>：到「③ 我的案件」找到案件 → 「打開修正」→ 改好資料 → 按「重新產出」。程式會列出改了什麼、影響哪幾份文件，只重新產出那幾份，舊檔備份在案件資料夾的「_舊版」。</li>
 </ol>
 <h3>模板標記規則</h3>
 <ul>
