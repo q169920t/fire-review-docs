@@ -52,6 +52,7 @@
 - 「發布 vX.Y」= 確認 `APP_VERSION` 是 X.Y，把 CHANGELOG 該版標題的「（尚未發布）」改成日期，例如 `## v1.6（2026-11-10）`，commit + push 到 main。GitHub Actions 偵測到「有日期、且還沒發布過」的版本，就會自動編譯並建立 Release 與標籤。只有使用者明確說要發布時才改日期。
   - 平常開發中的版本，CHANGELOG 標題一律寫「（尚未發布）」，否則一 push 就會發布。
   - 這個雲端環境不能推送標籤、也不能直接建立 Release（HTTP 403），所以才用這個方式。
+  - 「已發布」的判斷是 Release 存在且附有 3 個檔案；GitHub 回 502 時流程會自動重試，殘留的空標籤不影響重跑。發布後用 `curl -sSL https://github.com/q169920t/fire-review-docs/releases/latest/download/latest.json` 確認版本號。
 - 發布前先跑 `bash tests/run.sh`，全部通過才發布。
 - 設定檔格式有變動時，要寫升級程式（`migrateSettings`），舊的系統設定.json 打開時自動升級，不可遺失使用者資料。
 
