@@ -80,6 +80,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           V="v${{ steps.ver.outputs.app }}"
-          gh release create "$V" --target "$GITHUB_SHA" \
-            dist/FireReviewDocs.exe dist/app.html dist/latest.json \
-            --title "$V" --notes-file dist/notes.md
+          FILES="dist/FireReviewDocs.exe dist/app.html dist/latest.json"
+          # GitHub 偶爾回 502：先重試，最後改成「先建立 Release、再上傳檔案」
+          for i in 1 2 3; do
+            if gh release create "$V" --target "$GITHUB_SHA" $FILES --title "$V" --notes-file dist/notes.md; then exit 0; fi
+            echo "第 $i 次建立失敗，清掉殘留後重試"
+            gh release delete "$V" --yes --cleanup-tag 2>/dev/null || true
+            sleep 20
+          done
+          gh release view "$V" >/dev/null 2>&1 || gh release create "$V" --target "$GITHUB_SHA" --title "$V" --notes-file dist/notes.md
+          for i in 1 2 3 4 5; do
+            gh release upload "$V" $FILES --clobber && break
+            echo "上傳失敗，重試 $i"; sleep 15
+          done
+          gh release view "$V" --json assets -q '.assets[].name' | sort
+          [ "$(gh release view "$V" --json assets -q '.assets | length')" = "3" ]
