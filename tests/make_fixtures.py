@@ -10,6 +10,17 @@ for n in names:
     d = docx.Document(); d.add_paragraph('工程名稱：{工程名稱}　地址：{建築地址}'); d.add_paragraph('{□新建}新建 {□增建}增建'); r = d.add_paragraph().add_run('第三段\t定位點'); r.bold = True
     if n.startswith('委託書'): d.add_paragraph('受託人電話：{受託人電話}')
     d.save(os.path.join(W, 'root/templates', n))
+# 資料檢查表：有表格（項次、名稱、有、無、不須、備註）
+d = docx.Document(); d.add_paragraph('資料檢查表 {工程名稱}')
+t = d.add_table(rows=0, cols=6)
+for no, name in [(1, '申請書'), (6, '檢核表'), (8, '委託書'), (10, '危險物品切結書'), (11, '建築圖切結書')]:
+    c = t.add_row().cells; c[0].text = str(no); c[1].text = name; c[2].text = '{□}'; c[3].text = '{□}'; c[4].text = '{□}'; c[5].text = ''
+d.save(os.path.join(W, 'root/templates', '資料檢查表_template.docx'))
+# 圖審所需文件：條件標記與自動編號
+d = docx.Document(); d.add_paragraph('圖審所需文件 {□新建}{□增建}')
+d.add_paragraph('{序}、業主用印文件'); d.add_paragraph('{列:8}■委託書'); d.add_paragraph('{列:□新建|□增建}■核准函')
+t = d.add_table(rows=2, cols=1); t.rows[0].cells[0].text = '{列:13}{序}、電機技師知會函'; t.rows[1].cells[0].text = '{序}、結尾'
+d.save(os.path.join(W, 'root/templates', '圖審所需文件_template.docx'))
 for i in range(2): open(os.path.join(W, f'scan/scan{i}.pdf'), 'wb').write(b'%PDF-1.4\n%test' + bytes([i]))
 s = open(APP, encoding='utf8').read()
 import re

@@ -22,7 +22,7 @@
   - `main.go`：本機服務（127.0.0.1:47321，隨機通行碼 `X-App-Token`）、設定檔、更新邏輯
   - `ui_windows.go`：視窗、選資料夾對話框；`ui_other.go`：Linux 開發測試用（不開視窗）
   - `build.sh`：編譯 `dist/FireReviewDocs.exe`（會把 HTML 複製成 `shell/app.html` 內嵌）
-- `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，60 項）
+- `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，71 項）
 - `.github/workflows/release.yml`：main 上 CHANGELOG 出現有日期的新版本時，自動編譯並建立 Release
 - `docs/`：給人看的說明；`CHANGELOG.md`：每次發布的更新說明（白話）
 
@@ -40,6 +40,12 @@
 - 新文字保留 `{欄位}` 標記，產出時先改字再帶入資料（`fillTemplate(buf, resolve, { edits })`）；`\t`=定位點、`\n`=換行，整段沿用第一段文字的格式；頁首頁尾不開放修改。
 - 預覽用 `{ tag: true }` 在每段開頭塞私用區字元編號（U+E000…），渲染後 `tagPreview()` 取出並移除。
 - 「另存為模板版本」寫成 `templates/<原名>_<版本名>_template.docx`，加進該文件的 `templates` 清單，案件改選新版本並清掉 edits。
+
+## 資料檢查表與條件標記
+- 文件的 `no` 對應資料檢查表項次；檢查表上有該項次的文件（`byCl`），是否產出由檢查表決定（「不須」＝不產出），不看 `docChoices.include`。`no` 為負數＝檔名不加編號（`noLabel()`）。
+- 條件標記（`applyConds()`，只有傳 `cond: condEval` 才處理）：`{列:13}`、`{列:□變更使用}`，逗號＝AND、`|`＝OR；條件不符刪段落，表格列內容全空就刪列；`{序}` 依保留順序編號。`analyzeTemplate` 會把條件引用記在 `info.condCl` / `info.condChecks`（供重新產出判斷影響），不當成欄位。
+- 寫入 □ ■ 的 run 會補 `w:rFonts w:hint="eastAsia"`（`ensureEAHint`），避免 Word 用英文字型顯示而變小。
+- 注意：系統設定在共用雲端硬碟，新功能用到的設定（例如 `no: -1`、條件標記模板）要等新版發布後，舊版程式才看得懂。
 
 ## 我的案件（案件存檔與修正重新產出）
 - 清單存在系統資料夾 `案件紀錄\<使用者名稱>.json`（每人一份），每筆含 `id`（= 案件資料的 `caseId`）、資料夾名稱與路徑、完整案件資料快照。

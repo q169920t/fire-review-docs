@@ -162,7 +162,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const SETTINGS_FILE = '系統設定.json';
 const CASE_FILE = '案件資料.json';
-const APP_VERSION = '1.7';
+const APP_VERSION = '1.8';
 const TPL_DIR = 'templates';
 const BAD_CHARS = /[\\/:*?"<>|]/;
 const $ = s => document.querySelector(s);
@@ -388,7 +388,7 @@ async function loadDocx(buf) {
 
 /* 分析模板：找出欄位、勾選框、格式錯誤、檢查表項次 */
 async function analyzeTemplate(buf) {
-  const info = { fields: {}, checks: {}, generic: 0, errors: [], warnings: [], items: [] };
+  const info = { fields: {}, checks: {}, generic: 0, errors: [], warnings: [], items: [], condCl: {}, condChecks: {} };
   let pkg;
   try { pkg = await loadDocx(buf); } catch (e) { info.errors.push('無法開啟這個 Word 檔（' + e.message + '）。請確認是 .docx 格式且沒有損壞。'); return info; }
   for (const { doc } of pkg.parts) {
@@ -401,6 +401,15 @@ async function analyzeTemplate(buf) {
         const raw = m[1], name = raw.trim();
         if (raw !== name) info.warnings.push(`標記 {${raw}} 的大括號內有多餘空格，系統會當成 {${name}} 處理，建議修正。`);
         if (!name) { info.errors.push('發現空白標記 {}'); continue; }
+        if (name === '序') continue;
+        if (isCondMark(name)) {
+          for (const g of condTerms(name.replace(/^列[:：]/, ''))) for (const t of g) {
+            if (/^\d+$/.test(t)) info.condCl[t] = 1;
+            else if (t.startsWith('□')) info.condChecks[parseCheck(t).id] = 1;
+            else info.warnings.push(`條件標記 {${name}} 裡的「${t}」看不懂：請寫資料檢查表項次（例如 13）或勾選框（例如 □變更使用）。`);
+          }
+          continue;
+        }
         if (name === '□') info.generic++;
         else if (name.startsWith('□')) { const k = parseCheck(name).id; info.checks[k] = (info.checks[k] || 0) + 1; }
         else info.fields[name] = (info.fields[name] || 0) + 1;
@@ -450,10 +459,55 @@ const piNum = s => +s.split('').map(c => c.charCodeAt(0) - 0xE010).join('');
 const bodyParas = pkg => { const part = pkg.parts.find(x => x.name === 'word/document.xml'); return part ? wEls(part.doc, 'p') : []; };
 
 /* 填入資料：opt.edits = { 段落編號: 新文字 }；opt.tag = 預覽用段落編號 */
-async function fillTemplate(buf, resolve, opt = {}) {
+// □ ■ 要用中文字型顯示，否則 Word 會改用英文字型，看起來比前後的字小
+function ensureEAHint(r) {
+  if (!r || r.namespaceURI !== W || r.localName !== 'r') return;
+  const doc = r.ownerDocument;
+  let rPr = directKids(r, 'rPr')[0];
+  if (!rPr) { rPr = doc.createElementNS(W, 'w:rPr'); r.insertBefore(rPr, r.firstChild); }
+  let f = directKids(rPr, 'rFonts')[0];
+  if (!f) { f = doc.createElementNS(W, 'w:rFonts'); const st = directKids(rPr, 'rStyle')[0]; rPr.insertBefore(f, st ? st.nextSibling : rPr.firstChild); }
+  f.setAttributeNS(W, 'w:hint', 'eastAsia');
+}
+/* 條件標記：{列:13} 資料檢查表第 13 項不是「不須」才保留這一行；{列:□變更使用} 有勾才保留；
+   逗號＝而且、|＝或者；{序} 依保留下來的順序自動編號 */
+const COND_RE = /\{\s*列[:：]([^{}]*)\}/g;
+const isCondMark = n => /^列[:：]/.test(n);
+function condTerms(expr) { return expr.split(/[,，]/).map(g => g.split(/[|｜]/).map(t => t.trim()).filter(Boolean)); }
+function condEval(expr) {
+  return condTerms(expr).every(g => !g.length || g.some(t =>
+    /^\d+$/.test(t) ? clState(+t) !== '不須' : t.startsWith('□') ? !!S.cs.checks[parseCheck(t).id] : false));
+}
+function applyConds(doc, cond) {
+  const rows = new Set();
+  for (const p of wEls(doc, 'p')) {
+    const ts = paraTexts(p); if (!ts.length) continue;
+    const full = ts.map(t => t.textContent).join('');
+    if (!/\{\s*列[:：]/.test(full)) continue;
+    if ([...full.matchAll(COND_RE)].every(m => cond(m[1]))) continue;
+    const tc = closestW(p, 'tc'), tr = closestW(p, 'tr');
+    if (tc && directKids(tc, 'p').length <= 1) { for (const c of [...p.childNodes]) if (!(c.namespaceURI === W && c.localName === 'pPr')) p.removeChild(c); }
+    else p.parentNode.removeChild(p);
+    if (tr) rows.add(tr);
+  }
+  for (const tr of rows) {   // 整列內容都被刪掉時，整列移除
+    if (wEls(tr, 't').some(t => t.textContent.trim())) continue;
+    const tbl = tr.parentNode; tbl.removeChild(tr);
+    if (!directKids(tbl, 'tr').length && tbl.parentNode) tbl.parentNode.removeChild(tbl);
+  }
+}
+
+/* 填入資料：opt.edits = { 段落編號: 新文字 }；opt.tag = 預覽用段落編號；opt.cond = 條件判斷（有給才處理 {列:}{序}） */
+async function fillTemplate(buf, resolve0, opt = {}) {
   const pkg = await loadDocx(buf);
   const paras = bodyParas(pkg);
   if (opt.edits) for (const [i, t] of Object.entries(opt.edits)) if (paras[+i]) setParaText(paras[+i], t);
+  let resolve = resolve0;
+  if (opt.cond) {
+    for (const part of pkg.parts) applyConds(part.doc, opt.cond);
+    let seq = 0;
+    resolve = (name, ctx) => isCondMark(name) ? '' : name === '序' ? String(++seq) : resolve0(name, ctx);
+  }
   for (const part of pkg.parts) {
     const rowCount = new Map();
     for (const p of wEls(part.doc, 'p')) {
@@ -469,9 +523,11 @@ async function fillTemplate(buf, resolve, opt = {}) {
       });
       const starts = []; let acc = 0; for (const t of texts) { starts.push(acc); acc += t.length; }
       const at = pos => { let i = 0; while (i + 1 < starts.length && starts[i + 1] <= pos) i++; return i; };
+      const boxRuns = [];
       for (let i = reps.length - 1; i >= 0; i--) {
         const r = reps[i]; if (r.v == null) continue;
         const a = at(r.s), b = at(r.e - 1);
+        if (/[■□]/.test(r.v)) boxRuns.push(ts[a].parentNode);
         if (a === b) texts[a] = texts[a].slice(0, r.s - starts[a]) + r.v + texts[a].slice(r.e - starts[a]);
         else {
           texts[a] = texts[a].slice(0, r.s - starts[a]) + r.v;
@@ -480,6 +536,7 @@ async function fillTemplate(buf, resolve, opt = {}) {
         }
       }
       ts.forEach((t, i) => { if (t.textContent !== texts[i]) { t.textContent = texts[i]; t.setAttribute('xml:space', 'preserve'); } });
+      boxRuns.forEach(ensureEAHint);
     }
     if (opt.tag && part.name === 'word/document.xml') paras.forEach((p, i) => {
       const ts = paraTexts(p); if (!ts.length) return;
@@ -759,7 +816,7 @@ function selectCategory(id, silent) {
   S.cs.docChoices = {}; for (const d of cat.docIds) S.cs.docChoices[d] = { include: true, tpl: 0 };
   if (!silent) saveDraft();
 }
-// 案件類別下拉選單（文件產出頁最上方與第 5 步共用）
+// 案件類別下拉選單（文件產出頁最上方與最後一步共用）
 function categoryPicker(cat) {
   const sel = h('select', { style: 'min-width:200px', onchange: async e => {
     const id = e.target.value, to = catById(id);
@@ -777,13 +834,17 @@ function switchCategory(id) {
   Object.assign(S.cs.checks, keep);
   saveDraft();
 }
+// 資料檢查表上有對應項次的文件，依檢查表決定要不要產出：「不須」就不產出
 function caseDocs() {
   const cat = catById(S.cs.category); if (!cat) return [];
+  const clNos = new Set(checklistItems(cat).map(i => i.no));
+  const key = d => d.no < 0 ? 1e4 : d.no;
   return cat.docIds.map(docById).filter(Boolean).map(d => {
     const ch = S.cs.docChoices[d.id] || { include: true, tpl: 0 };
     const t = d.templates[ch.tpl] || d.templates[0];
-    return { doc: d, include: ch.include !== false, tplIndex: ch.tpl || 0, file: t?.file, info: t && S.tplInfo[t.file] };
-  }).sort((a, b) => a.doc.no - b.doc.no);
+    const byCl = !d.checklist && d.no > 0 && clNos.has(d.no);
+    return { doc: d, byCl, include: byCl ? clState(d.no) !== '不須' : ch.include !== false, tplIndex: ch.tpl || 0, file: t?.file, info: t && S.tplInfo[t.file] };
+  }).sort((a, b) => key(a.doc) - key(b.doc));
 }
 function caseMarkers() {
   const fields = new Set(), checks = new Set();
@@ -793,7 +854,8 @@ function caseMarkers() {
   }
   return { fields, checks };
 }
-const fileName = (no, abbr, name, ext) => `${pad2(no)}${abbr}-${name}${ext}`;
+const noLabel = no => no < 0 ? '' : pad2(no);   // 項次為負數＝檔名不加編號
+const fileName = (no, abbr, name, ext) => `${noLabel(no)}${abbr}-${name}${ext}`;
 
 function validateCase() {
   const out = [], cs = S.cs, cat = catById(cs.category);
@@ -870,7 +932,7 @@ function caseSteps() {
   const steps = (cat.steps || []).map(s => ({ title: s.title, docIds: s.docIds, fields: [], checks: [] }));
   const covered = new Set(steps.flatMap(s => s.docIds));
   const extra = docs.filter(cd => !covered.has(cd.doc.id));
-  if (extra.length) steps.push({ title: '其他文件：' + extra.map(x => x.doc.name).join('、'), docIds: extra.map(x => x.doc.id), fields: [], checks: [] });
+  if (extra.length) steps.push({ extra: true, title: '其他文件：' + extra.map(x => x.doc.name).join('、'), docIds: extra.map(x => x.doc.id), fields: [], checks: [] });
   const allChecks = caseMarkers().checks, ci = checkInputMap();
   const inlineFields = new Set(Object.entries(ci).filter(([c]) => allChecks.has(c)).map(([, f]) => f));
   const seenF = new Set(inlineFields), seenC = new Set();
@@ -881,7 +943,7 @@ function caseSteps() {
       for (const k of Object.keys(cd.info.checks)) if (!seenC.has(k)) { seenC.add(k); st.checks.push(k); }
     }
   }
-  return steps.filter(s => s.docs.length);
+  return steps.filter(s => s.docs.length && (!s.extra || s.fields.length || s.checks.length));
 }
 const stepNo = n => h('span', { class: 'n' }, String(n));
 function fieldBlock(fields) {
@@ -948,7 +1010,9 @@ function checklistTable(items) {
   for (const it of items) {
     const tr = h('tr', {});
     const cell = state => h('td', { class: 'clc' + (clState(it.no) === state ? ' on' : ''), title: `第 ${it.no} 項：${state}`, onclick: () => {
+      const was = clState(it.no);
       cs.cl[it.no] = state; saveDraft();
+      if ((was === '不須') !== (state === '不須') && S.settings.docs.some(d => d.no === it.no && !d.checklist)) { render(); return; }
       tr.querySelectorAll('td.clc').forEach(td => { const on = td.dataset.s === state; td.classList.toggle('on', on); td.firstChild.textContent = on ? '■' : '□'; });
     }, 'data-s': state }, box(clState(it.no) === state));
     tr.append(h('td', { class: 'c' }, String(it.no)), h('td', {}, it.name), cell('有'), cell('無'), cell('不須'), h('td', { class: 'rm' }, it.remark || ''));
@@ -969,7 +1033,7 @@ function viewGen(main) {
   const ed = S.editing;
   if (ed) left.append(h('div', { class: 'editbar' },
     h('span', {}, '正在修正：', h('b', {}, ed.abbr || '（未命名）'), h('span', { class: 'muted' }, `（${ed.folder || ''}，上次產出 ${ed.at ? rocStamp(ed.at) : ''}）`)),
-    h('span', { class: 'muted' }, '改好後按第 5 步的「重新產出」，會存回原本的資料夾。'),
+    h('span', { class: 'muted' }, '改好後按最後一步的「重新產出」，會存回原本的資料夾。'),
     h('button', { class: 'btn small', onclick: async () => {
       if (!await confirmBox('改為新案件', '保留目前填好的資料，但當成一個<b>新案件</b>，產出時會請你選擇新的案件資料夾。<br>原本的案件不受影響。', '改為新案件')) return;
       endEditing(); delete S.cs.caseId; saveDraft(); render(); } }, '改為新案件（保留資料）')));
@@ -983,7 +1047,18 @@ function viewGen(main) {
   let n = 0;
   if (cat) {
     const dateGroup = new Set(S.settings.fields.filter(f => f.group === '日期').map(f => f.name));
-    for (const st of caseSteps()) {
+    const items = checklistItems(cat), cld = caseDocs().find(x => x.doc.checklist && x.include);
+    const clCard = () => {
+      if (!items.length || !cld) return;
+      n++;
+      const card = h('div', { class: 'card step' }, h('h3', {}, stepNo(n), '資料檢查表'),
+        h('p', { class: 'muted', style: 'margin-top:-6px' }, '直接點選表格中的格子：需要且有附＝「有」，需要但未附＝「無」，不需要＝「不須」。勾「不須」的文件不會產出，後面的步驟也不會要求填它的欄位。'),
+        checklistTable(items),
+        h('div', { class: 'row', style: 'margin-top:8px' }, h('button', { class: 'btn small', onclick: () => { resetChecklist(cat); saveDraft(); render(); } }, '恢復類別預設')));
+      addCard(card, '資料檢查表', [cld]);
+    };
+    const steps = caseSteps();
+    steps.forEach((st, si) => {
       n++;
       const card = h('div', { class: 'card step' }, h('h3', {}, stepNo(n), st.title),
         h('p', { class: 'muted', style: 'margin-top:-6px' }, '對應文件：' + st.docs.map(cd => cd.doc.name).join('、') + (st.fields.length || st.checks.length ? '' : '（資料都已在前面的步驟填過）')));
@@ -992,16 +1067,9 @@ function viewGen(main) {
       if (st.checks.length) card.append(checkBlock(st.checks));
       if (rest.length) card.append(fieldBlock(rest));
       addCard(card, st.title, st.docs);
-    }
-    const items = checklistItems(cat), cld = caseDocs().find(x => x.doc.checklist && x.include);
-    if (items.length && cld) {
-      n++;
-      const card = h('div', { class: 'card step' }, h('h3', {}, stepNo(n), '資料檢查表'),
-        h('p', { class: 'muted', style: 'margin-top:-6px' }, '直接點選表格中的格子：需要且有附＝「有」，需要但未附＝「無」，不需要＝「不須」。'),
-        checklistTable(items),
-        h('div', { class: 'row', style: 'margin-top:8px' }, h('button', { class: 'btn small', onclick: () => { resetChecklist(cat); saveDraft(); render(); } }, '恢復類別預設')));
-      addCard(card, '資料檢查表', [cld]);
-    }
+      if (si === 0) clCard();   // 資料檢查表排在第 2 步
+    });
+    if (!steps.length) clCard();
   }
   n++;
   const c5 = h('div', { class: 'card step' }, h('h3', {}, stepNo(n), '確認案件類別與檔名'));
@@ -1015,8 +1083,10 @@ function viewGen(main) {
     for (const cd of caseDocs()) {
       const ch = cs.docChoices[cd.doc.id] || (cs.docChoices[cd.doc.id] = { include: true, tpl: 0 });
       tb.append(h('tr', {},
-        h('td', {}, h('input', { type: 'checkbox', checked: cd.include, onchange: e => { ch.include = e.target.checked; saveDraft(); render(); } })),
-        h('td', { class: 'mono' }, pad2(cd.doc.no)),
+        h('td', {}, cd.byCl
+          ? h('span', { class: cd.include ? '' : 'muted', title: `依資料檢查表第 ${cd.doc.no} 項決定；要改請到「資料檢查表」` }, cd.include ? '✔' : '不須')
+          : h('input', { type: 'checkbox', checked: cd.include, onchange: e => { ch.include = e.target.checked; saveDraft(); render(); } })),
+        h('td', { class: 'mono' }, noLabel(cd.doc.no) || '—'),
         h('td', {}, cd.doc.name),
         h('td', {}, cd.doc.templates.length > 1
           ? h('select', { onchange: e => { ch.tpl = +e.target.value; saveDraft(); render(); } }, cd.doc.templates.map((t, i) => h('option', { value: i, selected: i === cd.tplIndex }, t.label)))
@@ -1080,7 +1150,7 @@ async function renderPreview() {
   const cd = caseDocs().find(x => x.doc.id === PV.doc); if (!cd || !cd.file || !S.tplInfo[cd.file]) { body.innerHTML = '<div class="pvempty">找不到這份文件的模板</div>'; return; }
   const tok = ++PV.token;
   try {
-    const blob = await fillTemplate((await tplBuffer(cd.file)).slice(0), resolver(cd, true), { edits: docEdits(cd), tag: true });
+    const blob = await fillTemplate((await tplBuffer(cd.file)).slice(0), resolver(cd, true), { edits: docEdits(cd), tag: true, cond: condEval });
     if (tok !== PV.token) return;
     const tmp = h('div', {});
     await docx.renderAsync(blob, tmp, null, { inWrapper: true, breakPages: true, ignoreLastRenderedPageBreak: false, experimental: true, useBase64URL: true, renderHeaders: true, renderFooters: true });
@@ -1181,7 +1251,7 @@ async function saveTplVariant(cd) {
   const inp = h('input', { type: 'text', style: 'width:100%', placeholder: '例如：倉儲用' });
   const err = h('div', { class: 'ederr' });
   const box = h('div', {},
-    h('p', {}, `把「${cd.doc.name}」修改後的內容存成新的模板版本。之後在第 5 步的「版本」就能選用，同事也看得到。`),
+    h('p', {}, `把「${cd.doc.name}」修改後的內容存成新的模板版本。之後在最後一步的「版本」就能選用，同事也看得到。`),
     h('label', { class: 'f' }, h('span', {}, '版本名稱'), inp), err,
     h('p', { class: 'muted', style: 'margin-top:8px' }, '大括號 {…} 的自動帶入欄位會保留，下次使用時會換成新案件的資料。'));
   let label;
@@ -1251,7 +1321,7 @@ async function generate() {
     const cd = docs[i], name = names[i];
     try {
       const f = await readFile(tdir, cd.file);
-      const blob = await fillTemplate(await f.arrayBuffer(), resolver(cd), { edits: docEdits(cd) });
+      const blob = await fillTemplate(await f.arrayBuffer(), resolver(cd), { edits: docEdits(cd), cond: condEval });
       await writeFile(out, name, blob);
       const left = await leftoverMarks(blob);
       report.push(left.length ? { type: 'warn', text: `${name}：已產出，但還有未替換的標記 ${left.join(' ')}` } : { type: 'ok', text: `${name}：完成` });
@@ -1391,7 +1461,7 @@ async function openLoggedCase(c) {
   await applyRecord(rec);
   startEditing(rec, dir || { name: c.folder, path: c.path }, c.owner);
   saveDraft(); S.tab = 'gen'; render();
-  toast(`已打開「${c.abbr}」，改好後按第 5 步的「重新產出」`, 4000);
+  toast(`已打開「${c.abbr}」，改好後按最後一步的「重新產出」`, 4000);
 }
 // 比對修改前後
 function diffCase(prev, cs) {
@@ -1415,7 +1485,8 @@ function affectReasons(cd, changes, po) {
     if (c.kind === 'field' && (f[c.key] || Object.entries(ci).some(([chk, fld]) => fld === c.key && ck[chk]))) why.push(c.label);
     else if (c.kind === 'check' && ck[c.key]) why.push(c.label);
     else if (c.kind === 'pair' && (ck['有-' + c.key] || ck['無-' + c.key])) why.push(c.label);
-    else if (c.kind === 'cl' && cd.doc.checklist) why.push(c.label);
+    else if (c.kind === 'cl' && (cd.doc.checklist || cd.info?.condCl?.[c.key])) why.push(c.label);
+    else if (c.kind === 'check' && cd.info?.condChecks?.[c.key]) why.push(c.label);
     else if (c.kind === 'abbr') why.push('檔名改變');
     else if ((c.kind === 'edit' || c.kind === 'tpl') && c.key === cd.doc.id) why.push(c.label);
   }
@@ -1441,6 +1512,7 @@ async function regenerate() {
   const prevOut = Object.fromEntries((prev.outputs || []).map(o => [o.docId, o]));
   const rows = docs.map(cd => ({ cd, ...affectReasons(cd, changes, prevOut[cd.doc.id]) }));
   rows.forEach(r => r.cb = h('input', { type: 'checkbox', checked: r.pre }));
+  const dropped = (prev.outputs || []).filter(o => !docs.some(cd => cd.doc.id === o.docId));
   const short = t => t.length > 40 ? t.slice(0, 40) + '…' : t;
   const box = h('div', {},
     changes.length
@@ -1454,10 +1526,11 @@ async function regenerate() {
     h('table', { style: 'margin-top:6px' }, h('tbody', {}, rows.map(r => h('tr', {},
       h('td', {}, r.cb), h('td', { class: 'mono' }, fileName(r.cd.doc.no, cs.abbr, r.cd.doc.name, '.docx')),
       h('td', { class: r.pre ? '' : 'muted', style: 'font-size:13px' }, r.why.length ? r.why.join('、') : '沒有受影響'))))),
+    dropped.length ? h('p', { style: 'margin-top:8px' }, h('b', {}, '不再需要的文件：'), dropped.map(o => o.file).join('、'), '（會移到「_舊版」）') : null,
     h('p', { class: 'muted', style: 'margin-top:10px' }, '重新產出的文件如果已經用過印，需要重新用印；用印檢查表會標示「修正重印」。被取代的舊檔會移到案件資料夾的「_舊版」。'));
   if (!await modal('重新產出・' + (cs.abbr || ''), box, [{ label: '取消', value: false }, { label: '重新產出勾選的文件', value: true, primary: true }])) return;
   const sel = rows.filter(r => r.cb.checked);
-  if (!sel.length) { toast('沒有勾選任何文件'); return; }
+  if (!sel.length && !dropped.length) { toast('沒有勾選任何文件'); return; }
   const now = Date.now(), d = new Date(now);
   const stamp = `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}`;
   let bdir = null; const backedUp = [];
@@ -1468,12 +1541,13 @@ async function regenerate() {
   };
   const report = [], tdir = await getSub(S.root, TPL_DIR), newOut = {};
   try { await backup(CASE_FILE); await backup('用印檢查表.html'); } catch (e) { report.push({ type: 'warn', text: '舊的案件資料備份失敗：' + e.message }); }
+  for (const o of dropped) { try { await backup(o.file); report.push({ type: 'info', text: `${o.file}：已不需要，移到 _舊版` }); } catch (e) { report.push({ type: 'warn', text: `${o.file}：移動失敗（${e.message}）` }); } }
   for (const r of sel) {
     const cd = r.cd, name = fileName(cd.doc.no, cs.abbr, cd.doc.name, '.docx'), po = prevOut[cd.doc.id];
     try {
       for (const n of new Set([po && po.file, name])) await backup(n);
       const f = await readFile(tdir, cd.file);
-      const blob = await fillTemplate(await f.arrayBuffer(), resolver(cd), { edits: docEdits(cd) });
+      const blob = await fillTemplate(await f.arrayBuffer(), resolver(cd), { edits: docEdits(cd), cond: condEval });
       await writeFile(out, name, blob);
       const left = await leftoverMarks(blob);
       report.push(left.length ? { type: 'warn', text: `${name}：已重新產出，但還有未替換的標記 ${left.join(' ')}` } : { type: 'ok', text: `${name}：已重新產出` });
@@ -1527,7 +1601,7 @@ function viewScan(main) {
         h('td', {}, h('button', { class: 'btn small', onclick: () => scanPreview(f) }, '預覽')),
         h('td', { style: 'word-break:break-all' }, f),
         h('td', {}, h('select', { onchange: e => { sc.assign[f] = e.target.value; render(); } }, h('option', { value: '' }, '（略過）'),
-          targets.map(t => h('option', { value: t.docId, selected: t.docId === id }, `${pad2(t.no)} ${t.name}`)))),
+          targets.map(t => h('option', { value: t.docId, selected: t.docId === id }, `${noLabel(t.no)} ${t.name}`)))),
         h('td', { class: 'mono', style: 'word-break:break-all' }, d ? scanNewName(d) : '—', dup ? h('div', {}, h('span', { class: 'tag err' }, '重複對應')) : null)));
     }
     const left = h('div', {}, h('table', {}, h('thead', {}, h('tr', {}, ['', '掃描檔', '對應文件', '新檔名'].map(t => h('th', {}, t)))), tb));
@@ -1553,7 +1627,7 @@ function scanValidate() {
   const skipped = sc.files.length - assigned.length;
   if (skipped && assigned.length) out.push({ type: 'info', text: `有 ${skipped} 個掃描檔設為「略過」，不會處理。` });
   const missStamp = targets.filter(t => t.stamps && t.stamps.length && !count[t.docId]);
-  if (missStamp.length) out.push({ type: 'warn', text: '以下需用印的文件還沒有對應的掃描檔：' + missStamp.map(t => `${pad2(t.no)} ${t.name}`).join('、') });
+  if (missStamp.length) out.push({ type: 'warn', text: '以下需用印的文件還沒有對應的掃描檔：' + missStamp.map(t => `${noLabel(t.no)} ${t.name}`).join('、') });
   if (!out.some(m => m.type === 'err')) out.unshift({ type: 'ok', text: `${assigned.length} 個檔案準備就緒。` });
   return out;
 }

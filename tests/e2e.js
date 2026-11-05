@@ -44,12 +44,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await page.reload(); await sleep(1500);
   check('重新開啟自動進入主畫面', await page.isVisible('#layout') && !(await page.isVisible('button:has-text("選擇系統資料夾")')));
   const tplCount = await page.evaluate(() => S.tplFiles.length);
-  check('讀到模板', tplCount === 7, `(${tplCount})`);
+  check('讀到模板', tplCount === 8, `(${tplCount})`);
   const t0 = await page.evaluate(() => S.tplFiles[0]);
   check('模板修改時間正確', Math.abs(t0.lastModified - fs.statSync(path.join(W, 'root', 'templates', t0.name)).mtimeMs) < 2, t0.name);
 
   // 3b. 產出前在預覽上改字
-  await page.evaluate(() => { setPvStep(1); });
+  await page.evaluate(() => { setPvStep(PV.steps.findIndex(x => x.docs.some(cd => cd.doc.id === 'd08'))); });
   await sleep(500);
   await page.click('#pvpane .pvtabs button:has-text("委託書")');
   await page.waitForSelector('#pvbody p[data-pi]', { timeout: 10000 });
@@ -103,6 +103,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check('案件資料記住修改內容', Object.values(rec.edits.d08.paras).includes('本案名稱：{工程名稱}　地址：{建築地址}'));
 
   // 4b. 另存為模板版本
+  await page.evaluate(() => { setPvStep(PV.steps.findIndex(x => x.docs.some(cd => cd.doc.id === 'd08'))); PV.doc = 'd08'; buildPvPane(); });
+  await page.waitForSelector('#pvedits button:has-text("另存為模板版本")', { timeout: 10000 });
   await page.click('#pvedits button:has-text("另存為模板版本")');
   await page.fill('.modal input', '倉儲用');
   await page.click('.modal .btn.primary:has-text("存檔")'); await sleep(2500);
@@ -164,6 +166,36 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await page.reload(); await sleep(1500);
   const rl = await page.evaluate(() => ({ ed: !!S.editing, y: S.cs.values['年份'] }));
   check('重開程式仍在修正模式、日期不會被改成今天', rl.ed && rl.y === '100', JSON.stringify(rl));
+
+  // 4e. 資料檢查表「不須」自動排除；圖審所需文件條件標記；□■ 字型
+  await page.evaluate(() => { endEditing(); S.tab = 'gen'; S.cs.docChoices.d00 = { include: true, tpl: 0 }; S.cs.cl[8] = '不須'; saveDraft(); render(); }); await sleep(600);
+  const ex = await page.evaluate(() => ({ inc: caseDocs().find(x => x.doc.id === 'd08').include, by: caseDocs().find(x => x.doc.id === 'd08').byCl,
+    tel: [...document.querySelectorAll('#main label.f span')].some(x => x.textContent.includes('受託人電話')),
+    stepTitles: [...document.querySelectorAll('.card.step h3')].map(x => x.textContent) }));
+  check('檢查表「不須」的文件不產出', ex.by && !ex.inc);
+  check('專用欄位隱藏', !ex.tel);
+  check('資料檢查表排在第 2 步', (ex.stepTitles[1] || '').includes('資料檢查表'), ex.stepTitles.join(' / '));
+  check('最後一步顯示「不須」', (await page.textContent('#main')).includes('不須'));
+  const cond = await page.evaluate(async () => {
+    S.settings.docs.push({ id: 'd90', no: -1, name: '圖審所需文件', stamps: [], templates: [{ label: '標準版', file: '圖審所需文件_template.docx' }] });
+    catById(S.cs.category).docIds.push('d90'); await saveSettingsNow(); await scanTemplates();
+    const run = async () => { const cd = caseDocs().find(x => x.doc.id === 'd90');
+      const f = await readFile(await getSub(S.root, TPL_DIR), cd.file);
+      const blob = await fillTemplate(await f.arrayBuffer(), resolver(cd), { cond: condEval });
+      const pkg = await loadDocx(await blob.arrayBuffer());
+      return { text: bodyParas(pkg).map(p => paraTexts(p).map(t => t.textContent).join('')).filter(Boolean).join('|'), rows: wEls(pkg.parts.find(x => x.name === 'word/document.xml').doc, 'tr').length, name: fileName(cd.doc.no, S.cs.abbr, cd.doc.name, '.docx'), steps: caseSteps().map(s => s.title) }; };
+    S.cs.checks['新建'] = false; S.cs.checks['增建'] = false; const a = await run();
+    S.cs.cl[8] = '有'; S.cs.checks['增建'] = true; const b = await run();
+    return { a, b, warn: S.tplInfo['圖審所需文件_template.docx'].warnings, fields: Object.keys(S.tplInfo['圖審所需文件_template.docx'].fields) };
+  });
+  check('條件不符的行被刪除', !cond.a.text.includes('委託書') && !cond.a.text.includes('核准函'), cond.a.text);
+  check('條件符合的行保留、標記移除', cond.b.text.includes('■委託書') && cond.b.text.includes('■核准函') && !cond.b.text.includes('列:'), cond.b.text);
+  check('整列刪除、自動編號接續', cond.b.rows === 1 && cond.b.text.includes('1、業主用印文件') && cond.b.text.includes('2、結尾') && !cond.b.text.includes('電機'), cond.b.text);
+  check('條件標記不會變成表單欄位', cond.fields.length === 0 && cond.warn.length === 0, JSON.stringify(cond));
+  check('檔名不加項次編號', cond.b.name === '城市倉儲-圖審所需文件.docx', cond.b.name);
+  check('沒有新欄位的文件不另開步驟', !cond.b.steps.some(t => t.includes('圖審所需文件')), cond.b.steps.join(' / '));
+  const hint = require('child_process').execSync(`unzip -p "${path.join(W, 'case', '01城市倉儲-圖說審查申請書.docx')}" word/document.xml`).toString();
+  check('□■ 設定為中文字型顯示', /<w:r>(?:(?!<\/w:r>).)*w:hint="eastAsia"(?:(?!<\/w:r>).)*[□■]/s.test(hint));
 
   // 5. 掃描檔：讀、寫、刪、同資料夾判斷
   const r5 = await page.evaluate(async (dir) => {
