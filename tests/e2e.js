@@ -90,7 +90,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const outs = fs.readdirSync(path.join(W, 'case'));
   console.log('case files:', outs.join(' | '));
   check('產出 5 份 Word', outs.filter(f => f.endsWith('.docx')).length === 5);
-  check('產出 案件資料.json 與 用印檢查表', outs.includes('案件資料.json') && outs.includes('用印檢查表.html'));
+  check('產出 案件資料.json、不再產出用印檢查表', outs.includes('案件資料.json') && !outs.includes('用印檢查表.html'));
   check('沒有留下暫存檔', !outs.some(f => f.includes('.tmp')));
   const wt = outs.find(f => f.includes('委託書'));
   const xml = require('child_process').execSync(`unzip -p "${path.join(W, 'case', wt)}" word/document.xml`).toString();
@@ -148,7 +148,6 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const rec2 = JSON.parse(fs.readFileSync(path.join(W, 'case', '案件資料.json'), 'utf8'));
   check('記錄修改歷程', rec2.history.length === 1 && rec2.history[0].changes.some(c => c.label === '受託人電話' && c.to === '04-1234-5678') && rec2.history[0].by === '測試員');
   check('其他文件的產出紀錄保留', rec2.outputs.length === 5 && rec2.outputs.find(o => o.docId === 'd08').revisedAt && !rec2.outputs.find(o => o.docId === 'd01').revisedAt);
-  check('用印檢查表標示修正重印', fs.readFileSync(path.join(W, 'case', '用印檢查表.html'), 'utf8').includes('修正重印'));
   check('案件清單更新修正次數', JSON.parse(fs.readFileSync(logF, 'utf8')).cases[0].revisions === 1);
 
   // 4d. 清空後從「我的案件」打開
@@ -186,16 +185,69 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       return { text: bodyParas(pkg).map(p => paraTexts(p).map(t => t.textContent).join('')).filter(Boolean).join('|'), rows: wEls(pkg.parts.find(x => x.name === 'word/document.xml').doc, 'tr').length, name: fileName(cd.doc.no, S.cs.abbr, cd.doc.name, '.docx'), steps: caseSteps().map(s => s.title) }; };
     S.cs.checks['新建'] = false; S.cs.checks['增建'] = false; const a = await run();
     S.cs.cl[8] = '有'; S.cs.checks['增建'] = true; const b = await run();
-    return { a, b, warn: S.tplInfo['圖審所需文件_template.docx'].warnings, fields: Object.keys(S.tplInfo['圖審所需文件_template.docx'].fields) };
+    S.cs.checks['新建'] = true; const c = await run(); S.cs.checks['新建'] = false;
+    return { a, b, c, warn: S.tplInfo['圖審所需文件_template.docx'].warnings, fields: Object.keys(S.tplInfo['圖審所需文件_template.docx'].fields) };
   });
   check('條件不符的行被刪除', !cond.a.text.includes('委託書') && !cond.a.text.includes('核准函'), cond.a.text);
   check('條件符合的行保留、標記移除', cond.b.text.includes('■委託書') && cond.b.text.includes('■核准函') && !cond.b.text.includes('列:'), cond.b.text);
   check('整列刪除、自動編號接續', cond.b.rows === 1 && cond.b.text.includes('1、業主用印文件') && cond.b.text.includes('2、結尾') && !cond.b.text.includes('電機'), cond.b.text);
   check('條件標記不會變成表單欄位', cond.fields.length === 0 && cond.warn.length === 0, JSON.stringify(cond));
+  check('排除條件：沒勾新建才列出', cond.b.text.includes('■使用執照') && !cond.c.text.includes('■使用執照') && cond.c.text.includes('■委託書'), cond.c.text);
   check('檔名不加項次編號', cond.b.name === '城市倉儲-圖審所需文件.docx', cond.b.name);
   check('沒有新欄位的文件不另開步驟', !cond.b.steps.some(t => t.includes('圖審所需文件')), cond.b.steps.join(' / '));
   const hint = require('child_process').execSync(`unzip -p "${path.join(W, 'case', '01城市倉儲-圖說審查申請書.docx')}" word/document.xml`).toString();
   check('□■ 設定為中文字型顯示', /<w:r>(?:(?!<\/w:r>).)*w:hint="eastAsia"(?:(?!<\/w:r>).)*[□■]/s.test(hint));
+
+  // 4f. 圖審所需文件在資料檢查表那一步預覽
+  await page.evaluate(() => { S.cs.docChoices.d00 = { include: true, tpl: 0 }; saveDraft(); render(); }); await sleep(500);
+  const pvTabs = await page.evaluate(() => { const i = PV.steps.findIndex(x => x.title === '資料檢查表'); return i >= 0 ? PV.steps[i].docs.map(cd => cd.doc.name) : []; });
+  check('資料檢查表那一步可以預覽圖審所需文件', pvTabs.includes('資料檢查表') && pvTabs.includes('圖審所需文件'), pvTabs.join(','));
+
+  // 4g. 存檔：資料不齊也能存到「我的案件」，之後繼續填，產出後同一筆變成已產出
+  pick = path.join(W, 'case2'); fs.mkdirSync(pick, { recursive: true });
+  await page.evaluate(() => { endEditing(); S.cs = blankCase(); selectCategory(S.settings.categories[0].id); S.cs.abbr = '草稿案'; S.cs.values['工程名稱'] = '草稿測試工程'; saveDraft(); render(); });
+  await sleep(400);
+  await page.click('#main button:has-text("存檔")'); await sleep(800);
+  const lg1 = JSON.parse(fs.readFileSync(logF, 'utf8')).cases.find(c => c.abbr === '草稿案');
+  check('沒產出也能存到我的案件', lg1 && lg1.status === 'draft' && lg1.draft.values['工程名稱'] === '草稿測試工程', JSON.stringify(lg1 && lg1.status));
+  check('顯示草稿標示', await page.isVisible('.editbar:has-text("草稿")'));
+  await page.evaluate(() => { S.cs.values['受託人電話'] = '02-0000-0000'; saveDraft(); });
+  await page.click('#main button:has-text("存檔")'); await sleep(800);
+  const lgN = JSON.parse(fs.readFileSync(logF, 'utf8')).cases.filter(c => c.abbr === '草稿案');
+  check('再次存檔更新同一筆', lgN.length === 1 && lgN[0].draft.values['受託人電話'] === '02-0000-0000');
+  await page.evaluate(() => { endEditing(); S.cs = blankCase(); saveDraft(); S.tab = 'cases'; render(); });
+  await page.waitForSelector('#main tbody tr');
+  check('清單顯示「未產出（草稿）」', (await page.textContent('#main tbody')).includes('未產出（草稿）'));
+  await page.fill('#main input[type=text]', '草稿案'); await sleep(200);
+  await page.click('#main tbody button:has-text("繼續填寫")'); await page.click('.modal .btn.primary:has-text("打開")'); await sleep(800);
+  const dr = await page.evaluate(() => ({ tel: S.cs.values['受託人電話'], d: !!S.drafting, e: !!S.editing }));
+  check('打開草稿可以繼續填', dr.tel === '02-0000-0000' && dr.d && !dr.e, JSON.stringify(dr));
+  await page.evaluate(() => { for (const f of S.settings.fields) S.cs.values[f.name] = S.cs.values[f.name] || ('測' + f.name); for (const d of S.settings.docs) S.cs.docChoices[d.id] = { include: !d.checklist, tpl: 0 }; saveDraft(); window.__gen = generate(); });
+  for (let i = 0; i < 6; i++) { await sleep(700); if (await page.isVisible('.modal .hd:has-text("產出結果")')) break; const b = await page.$('.modal .ft .btn.primary'); if (b) await b.click(); }
+  check('產出結果沒有列印用印檢查表按鈕', !(await page.isVisible('.modal button:has-text("用印")')));
+  await page.click('.modal button:has-text("關閉")');
+  const lgD = JSON.parse(fs.readFileSync(logF, 'utf8')).cases.filter(c => c.abbr === '草稿案');
+  check('產出後同一筆變成已產出', lgD.length === 1 && lgD[0].status === 'done' && !lgD[0].draft && lgD[0].folder === 'case2', JSON.stringify(lgD.map(x => x.status + '/' + x.folder)));
+  // 已產出案件：存檔不動 Word，下次打開接續存檔內容
+  const m0 = fs.statSync(path.join(W, 'case2', '08草稿案-委託書.docx')).mtimeMs;
+  await page.evaluate(() => { S.cs.values['受託人電話'] = '03-1111-1111'; saveDraft(); });
+  await page.click('#main button:has-text("存檔")'); await sleep(800);
+  const lgE = JSON.parse(fs.readFileSync(logF, 'utf8')).cases.find(c => c.abbr === '草稿案');
+  check('已產出案件存檔不動 Word', lgE.draft && lgE.draft.values['受託人電話'] === '03-1111-1111' && fs.statSync(path.join(W, 'case2', '08草稿案-委託書.docx')).mtimeMs === m0);
+  await page.evaluate(() => { endEditing(); S.cs = blankCase(); saveDraft(); S.tab = 'cases'; render(); });
+  await page.waitForSelector('#main tbody tr'); await page.fill('#main input[type=text]', '草稿案'); await sleep(200);
+  check('清單標示有未重新產出的修改', (await page.textContent('#main tbody')).includes('未重新產出'));
+  await page.click('#main tbody button:has-text("打開修正")'); await page.click('.modal .btn.primary:has-text("打開")'); await sleep(800);
+  const de = await page.evaluate(() => ({ tel: S.cs.values['受託人電話'], e: !!S.editing }));
+  check('打開時接續存檔內容', de.tel === '03-1111-1111' && de.e, JSON.stringify(de));
+  // 刪除草稿
+  await page.evaluate(() => { endEditing(); S.cs = blankCase(); selectCategory(S.settings.categories[0].id); S.cs.abbr = '要刪的'; S.tab = 'gen'; saveDraft(); render(); }); await sleep(300);
+  await page.click('#main button:has-text("存檔")'); await sleep(800);
+  await page.evaluate(() => { S.tab = 'cases'; render(); }); await page.waitForSelector('#main tbody tr');
+  await page.fill('#main input[type=text]', '要刪的'); await sleep(200);
+  await page.click('#main tbody button:has-text("刪除")'); await page.click('.modal .btn.primary:has-text("刪除")'); await sleep(800);
+  check('可以刪除草稿', !JSON.parse(fs.readFileSync(logF, 'utf8')).cases.some(c => c.abbr === '要刪的'));
+  await page.evaluate(() => { endEditing(); S.cs = blankCase(); saveDraft(); });
 
   // 5. 掃描檔：讀、寫、刪、同資料夾判斷
   const r5 = await page.evaluate(async (dir) => {

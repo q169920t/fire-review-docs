@@ -18,7 +18,7 @@ for no, name in [(1, '申請書'), (6, '檢核表'), (8, '委託書'), (10, '危
 d.save(os.path.join(W, 'root/templates', '資料檢查表_template.docx'))
 # 圖審所需文件：條件標記與自動編號
 d = docx.Document(); d.add_paragraph('圖審所需文件 {□新建}{□增建}')
-d.add_paragraph('{序}、業主用印文件'); d.add_paragraph('{列:8}■委託書'); d.add_paragraph('{列:□新建|□增建}■核准函')
+d.add_paragraph('{序}、業主用印文件'); d.add_paragraph('{列:8}■委託書'); d.add_paragraph('{列:□新建|□增建}■核准函'); d.add_paragraph('{列:8,!□新建}■使用執照')
 t = d.add_table(rows=2, cols=1); t.rows[0].cells[0].text = '{列:13}{序}、電機技師知會函'; t.rows[1].cells[0].text = '{序}、結尾'
 d.save(os.path.join(W, 'root/templates', '圖審所需文件_template.docx'))
 for i in range(2): open(os.path.join(W, f'scan/scan{i}.pdf'), 'wb').write(b'%PDF-1.4\n%test' + bytes([i]))
