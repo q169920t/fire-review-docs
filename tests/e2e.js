@@ -349,8 +349,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       await page.mouse.move(b.x + 100 * z, b.y + 100 * z); await page.mouse.down(); await page.mouse.move(b.x + 250 * z, b.y + 200 * z, { steps: 4 }); await page.mouse.up();  }
     // 匯出
     pick = path.join(W, 'pdfout');
-    await page.fill('.pe-name', '測試合併');
-    await page.click('#peExport'); await page.click('.modal button:has-text("選擇資料夾並匯出")');
+    await page.click('#peExport'); await page.waitForSelector('.modal .pe-name');
+    check('PDF 編輯：匯出視窗可以填檔名', (await page.inputValue('.modal .pe-name')).length > 0);
+    await page.fill('.modal .pe-name', '測試合併');
+    await page.click('.modal button:has-text("選擇資料夾並匯出")');
     await page.waitForSelector('.modal .hd:has-text("匯出完成")', { timeout: 30000 });
     const outPdf = path.join(W, 'pdfout', '測試合併.pdf');
     check('PDF 編輯：匯出 PDF 與編輯紀錄', fs.existsSync(outPdf) && fs.existsSync(path.join(W, 'pdfout', '測試合併.pdfedit')));
@@ -366,7 +368,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check('PDF 編輯：沒有標註的地方是空白', res.boxes[3].red === 0 && res.boxes[3].dark === 0, JSON.stringify(res.boxes[3]));
     // 清除後重新開啟編輯紀錄
     const before = await page.evaluate(() => JSON.stringify(PE.pages.map(p => [p.rot, p.anns.length])));
-    await page.click('button:has-text("清除")'); await sleep(200);
+    await page.click('button[title="清除目前的全部內容，重新開始"]'); await sleep(200);
     if (await page.isVisible('.modal')) await page.click('.modal .btn.primary');
     await page.waitForSelector('.pe-empty');
     fc = page.waitForEvent('filechooser'); await page.click('.pe-empty button:has-text("開啟編輯紀錄")');
@@ -375,7 +377,88 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     await page.waitForFunction(() => document.querySelectorAll('.pe-card .pe-thumb canvas').length === 4, null, { timeout: 20000 });
     const after = await page.evaluate(() => JSON.stringify(PE.pages.map(p => [p.rot, p.anns.length])));
     check('PDF 編輯：開啟編輯紀錄還原頁面與標註', before === after && (await order()).join() === 'B1,A1,A2,blank', after);
-    check('PDF 編輯：編輯紀錄保留檔名', (await page.inputValue('.pe-name')) === '測試合併');
+    check('PDF 編輯：編輯紀錄保留檔名', (await page.evaluate(() => PE.name)) === '測試合併');
+
+    // 5c. v2.1：刪除原有圖片、清除原有註解、文字格式、插入圖片、印章庫
+    await page.click('button[title="清除目前的全部內容，重新開始"]'); await sleep(200);
+    if (await page.isVisible('.modal')) await page.click('.modal .btn.primary');
+    await page.waitForSelector('.pe-empty');
+    fc = page.waitForEvent('filechooser'); await page.click('.pe-empty button:has-text("選擇 PDF 檔")');
+    await (await fc).setFiles(path.join(W, 'pdf/C.pdf'));
+    await page.waitForFunction(() => PE.pages.length === 1);
+    await page.click('#peStripAnn'); await page.waitForSelector('.modal .hd:has-text("清除原有註解")');
+    check('PDF 編輯：找到原有註解', (await page.textContent('.modal .bd')).includes('2 個原有註解'), await page.textContent('.modal .bd'));
+    await page.click('.modal .btn.primary'); await sleep(300);
+    check('PDF 編輯：清除原有註解', await page.evaluate(() => PE.pages[0].noAnn === true));
+    await page.dblclick('.pe-card >> nth=0'); await page.waitForSelector('.pe-page'); await sleep(300);
+    await page.evaluate(() => { PE.zoom = 0.8; peRender(); }); await sleep(800);
+    const ovC = await page.$('.pe-page >> nth=0 >> .pe-ov'); const zc = await page.evaluate(() => PE.zoom);
+    const atC = async (x, y) => { const b = await ovC.boundingBox(); return [b.x + x * zc, b.y + y * zc]; };
+    await page.click('.pe-tb [data-tool="objdel"]'); await page.waitForSelector('.pe-obj');
+    const objs = await page.evaluate(() => peObjList(PE.pages[0]).map(o => [o.k, Math.round(o.x), Math.round(o.y), Math.round(o.w), Math.round(o.h)]));
+    check('PDF 編輯：找到頁面上的 3 張圖片（含子圖層裡的）', objs.length === 3, JSON.stringify(objs));
+    // C.pdf：紅圖 (100,742)-(200,842)→畫面 y=0..100；綠圖在子圖層 (100,500)
+    { const [x, y] = await atC(150, 75); await page.mouse.click(x, y); await sleep(500); }
+    { const [x, y] = await atC(150, 292); await page.mouse.click(x, y); await sleep(500); }
+    check('PDF 編輯：點選刪除兩張圖片', await page.evaluate(() => (PE.pages[0].del || []).length) === 2, JSON.stringify(await page.evaluate(() => PE.pages[0].del)));
+    check('PDF 編輯：刪除後剩 1 張可選', await page.evaluate(() => peObjList(PE.pages[0]).length) === 1);
+    await page.keyboard.press('Control+z'); await sleep(300);
+    check('PDF 編輯：復原刪除圖片', await page.evaluate(() => (PE.pages[0].del || []).length) === 1);
+    await page.keyboard.press('Control+y'); await sleep(300);
+    // 文字格式
+    await page.click('.pe-tb [data-tool="text"]');
+    { const [x, y] = await atC(300, 600); await page.mouse.click(x, y); }
+    await page.waitForSelector('.pe-ta'); await page.keyboard.type('粗體置中'); await page.keyboard.press('Escape'); await sleep(200);
+    await page.click('.pe-tb [data-tool="select"]');
+    { const t = await page.evaluate(() => PE.pages[0].anns.find(a => a.type === 'text')); const [x, y] = await atC(t.x + 10, t.y + 8); await page.mouse.click(x, y); await sleep(150); }
+    await page.click('.pe-tb button[title="粗體"]'); await page.click('.pe-tb button[title="置中"]'); await page.click('.pe-tb button[title="底線"]');
+    await page.click('.pe-tb button[title="底色"] >> nth=1'); // 黃底
+    await page.click('.pe-tb button[title="文字框加外框"]'); await sleep(100);
+    await page.click('.pe-tb button[title="框線顏色"] >> nth=1'); await sleep(100);
+    const ft = await page.evaluate(() => PE.pages[0].anns.find(a => a.type === 'text'));
+    check('PDF 編輯：文字格式（粗體、置中、底線、底色、外框顏色）', ft.bold && ft.align === 'center' && ft.underline && ft.fill === '#fff3a0' && ft.border && ft.bcolor === '#1a5fd0' && ft.color === '#d4202c', JSON.stringify(ft));
+    // 插入圖片（去白底）
+    fc = page.waitForEvent('filechooser'); await page.click('.pe-tb [data-tool="image"]');
+    await (await fc).setFiles(path.join(W, 'pdf/stamp.png'));
+    await page.waitForSelector('.modal .hd:has-text("插入圖片")');
+    await page.fill('.modal input[type=number]', '2'); await page.click('.modal button:has-text("放到頁面上")'); await sleep(300);
+    { const [x, y] = await atC(450, 150); await page.mouse.click(x, y); await sleep(200); }
+    const im = await page.evaluate(() => { const a = PE.pages[0].anns.find(a => a.type === 'img'); return a && { ...a, t: PE.imgs[a.key].type }; });
+    check('PDF 編輯：插入圖片（寬 2 公分）', im && Math.abs(im.w - 2 / 2.54 * 72) < 0.5 && im.t === 'png', JSON.stringify(im));
+    check('PDF 編輯：圖片去除白底（透明）', await page.evaluate(async () => { const a = PE.pages[0].anns.find(a => a.type === 'img'); const bm = await createImageBitmap(new Blob([PE.imgs[a.key].bytes])); const c = new OffscreenCanvas(bm.width, bm.height), g = c.getContext('2d'); g.drawImage(bm, 0, 0); return g.getImageData(1, 1, 1, 1).data[3] === 0 && g.getImageData(bm.width >> 1, bm.height >> 1, 1, 1).data[3] === 255 && bm.width < 240; }));
+    await page.keyboard.press('Escape'); await sleep(100);
+    // 印章庫：新增、蓋章
+    await page.click('.pe-tb [data-tool="stamp"]'); await page.waitForSelector('.modal .hd:has-text("印章庫")');
+    check('PDF 編輯：印章庫一開始是空的', (await page.textContent('.modal .bd')).includes('還是空的'));
+    fc = page.waitForEvent('filechooser'); await page.click('.modal button:has-text("從圖片新增")');
+    await (await fc).setFiles(path.join(W, 'pdf/stamp.png'));
+    await page.waitForSelector('.modal .hd:has-text("新增印章")');
+    await page.fill('.modal input[type=text]', '測試章'); await page.fill('.modal input[type=number]', '2.5');
+    await page.click('.modal button:has-text("存到印章庫並開始蓋")'); await sleep(800);
+    check('PDF 編輯：印章存到系統資料夾', fs.existsSync(path.join(W, 'root', '印章庫', '測試章.png')) && JSON.parse(fs.readFileSync(path.join(W, 'root', '印章庫', '印章庫.json'), 'utf8'))['測試章.png'].w === 2.5);
+    { const [x, y] = await atC(450, 300); await page.mouse.click(x, y); await sleep(150); const [x2, y2] = await atC(450, 400); await page.mouse.click(x2, y2); await sleep(150); }
+    check('PDF 編輯：印章可以連續蓋', await page.evaluate(() => PE.pages[0].anns.filter(a => a.type === 'img').length) === 3);
+    await page.keyboard.press('Escape'); await sleep(100);
+    await page.click('.pe-tb [data-tool="stamp"]'); await page.waitForSelector('.modal .pe-stamp');
+    check('PDF 編輯：印章庫列出新印章', (await page.textContent('.modal .pe-stamp')).includes('測試章'));
+    await page.click('.modal .pe-stamp'); await sleep(300);
+    check('PDF 編輯：從印章庫選用', await page.evaluate(() => PE.tool === 'place' && Math.abs(PE.placing.w - 2.5 / 2.54 * 72) < 0.1));
+    await page.keyboard.press('Escape');
+    // 匯出並檢查
+    pick = path.join(W, 'pdfout');
+    await page.click('#peExport'); await page.waitForSelector('.modal .pe-name');
+    await page.fill('.modal .pe-name', 'v21測試'); await page.click('.modal button:has-text("選擇資料夾並匯出")');
+    await page.waitForSelector('.modal .hd:has-text("匯出完成")', { timeout: 30000 }); await page.click('.modal button:has-text("關閉")');
+    const out21 = path.join(W, 'pdfout', 'v21測試.pdf');
+    const T2 = await page.evaluate(() => { const a = PE.pages[0].anns.find(a => a.type === 'text'); return { ...a, th: peTextH(a) }; });
+    const I2 = await page.evaluate(() => PE.pages[0].anns.find(a => a.type === 'img'));
+    const res2 = JSON.parse(execFileSync('python3', [path.join(__dirname, 'pdf_check.py'), out21, JSON.stringify([[0, 100, 0, 100, 100], [0, 100, 242, 100, 100], [0, 300, 0, 100, 100], [0, T2.x, T2.y, T2.w, T2.th], [0, I2.x, I2.y, I2.w, I2.h]])]).toString());
+    check('PDF 編輯：刪掉的紅色圖片不見了', res2.boxes[0].red === 0, JSON.stringify(res2.boxes[0]));
+    check('PDF 編輯：刪掉的子圖層圖片不見了', res2.boxes[1].green === 0, JSON.stringify(res2.boxes[1]));
+    check('PDF 編輯：沒刪的藍色圖片還在', res2.boxes[2].blue > 1000, JSON.stringify(res2.boxes[2]));
+    check('PDF 編輯：匯出後沒有原有註解、剩 1 張原圖', res2.annots[0] === 0 && res2.imgsizes[0].filter(z => z[0] === 40).length === 1, JSON.stringify([res2.annots, res2.imgsizes]));
+    check('PDF 編輯：文字底色與字印出', res2.boxes[3].yellow > 200 && res2.boxes[3].red > 50, JSON.stringify(res2.boxes[3]));
+    check('PDF 編輯：印章印在正確位置', res2.boxes[4].red > 100, JSON.stringify(res2.boxes[4]));
     pick = path.join(W, 'root');
     await page.click('nav button:has-text("文件產出")'); await sleep(300);
   }

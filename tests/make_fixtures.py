@@ -39,6 +39,18 @@ for t in ['PAGE-A1', 'PAGE-A2']:
 c.save()
 c = canvas.Canvas(os.path.join(W, 'pdf/B.pdf'), pagesize=landscape(A4))
 c.setPageRotation(90); c.setFont('Helvetica', 40); c.drawString(80, 400, 'PAGE-B1'); c.showPage(); c.save()
+# v2.1 測試用：C.pdf 有紅、藍兩張圖、子圖層裡一張綠圖，以及 2 個原有註解；stamp.png 白底紅章
+from PIL import Image, ImageDraw
+for nm, col in [('red', (220, 20, 20)), ('blue', (20, 40, 220)), ('green', (20, 200, 40))]:
+    Image.new('RGB', (40, 40), col).save(os.path.join(W, f'pdf/{nm}.png'))
+c = canvas.Canvas(os.path.join(W, 'pdf/C.pdf'), pagesize=A4)
+c.drawImage(os.path.join(W, 'pdf/red.png'), 100, 742, 100, 100); c.drawImage(os.path.join(W, 'pdf/blue.png'), 300, 742, 100, 100)
+c.beginForm('f1'); c.drawImage(os.path.join(W, 'pdf/green.png'), 100, 500, 100, 100); c.endForm(); c.doForm('f1')
+c.setFont('Helvetica', 20); c.drawString(80, 400, 'PAGE-C1')
+c.linkURL('https://example.com', (80, 390, 200, 420)); c.linkURL('https://example.org', (80, 300, 200, 330))
+c.showPage(); c.save()
+im = Image.new('RGB', (300, 300), 'white'); d = ImageDraw.Draw(im); d.ellipse((40, 40, 260, 260), outline=(210, 20, 30), width=24); d.rectangle((120, 120, 180, 180), fill=(210, 20, 30))
+im.save(os.path.join(W, 'pdf/stamp.png'))
 # 中文字型（有系統字型才放；沒有時程式會改用圖片方式匯出文字）
 for f in ['/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc']:
     if os.path.exists(f): shutil.copy(f, os.path.join(W, 'root/字型', os.path.basename(f))); break

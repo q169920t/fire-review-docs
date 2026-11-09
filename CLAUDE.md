@@ -22,7 +22,7 @@
   - `main.go`：本機服務（127.0.0.1:47321，隨機通行碼 `X-App-Token`）、設定檔、更新邏輯
   - `ui_windows.go`：視窗、選資料夾對話框；`ui_other.go`：Linux 開發測試用（不開視窗）
   - `build.sh`：編譯 `dist/FireReviewDocs.exe`（會把 HTML 複製成 `shell/app.html` 內嵌）
-- `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，109 項；PDF 編輯的檢查用 `tests/pdf_check.py`，需要 pypdf、pypdfium2、reportlab）
+- `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，130 項；PDF 編輯的檢查用 `tests/pdf_check.py`，需要 pypdf、pypdfium2、reportlab）
 - `.github/workflows/release.yml`：main 上 CHANGELOG 出現有日期的新版本時，自動編譯並建立 Release
 - `docs/`：給人看的說明；`CHANGELOG.md`：每次發布的更新說明（白話）
 
@@ -52,9 +52,14 @@
 - 狀態在 `PE`：`srcs`（來源檔 bytes、pdf.js 文件、每頁大小與原本旋轉）、`pages`（`{id, src, idx, rot, anns}`，空白頁 `src:null` 並帶 `w,h`）。`peDims()` 算出畫面上的寬高與總旋轉角。
 - 標註座標＝畫面上看到的方向、單位 pt、左上原點。旋轉頁面時 `peRotAnn()` 一起轉換。畫面與匯出共用 `peParts()` 產生的路徑；匯出時用 `peMatrix()` 把畫面座標換回 PDF 座標，並先 `wrapContentStreams` 包住原內容。
 - 文字斷行 `peWrap()` 畫面與匯出共用；有字型（系統資料夾 `字型\` 第一個 .otf/.ttf/.ttc）時用 fontkit 量字寬並把字轉成向量路徑印上去，沒有字型就用 canvas 畫成 4 倍解析度 PNG。
-- 編輯紀錄 `.pdfedit` = zip：`edit.json`（name、srcs、pages）+ `src/N.pdf` 原始檔。
+- 編輯紀錄 `.pdfedit` = zip：`edit.json`（name、srcs、imgs、pages）+ `src/N.pdf` 原始檔 + `img/N.*` 插入的圖片。
 - 加密的來源檔無法直接複製頁面，匯出時改用 200 dpi 圖片。
-- 測試注意：Playwright 的檔案選擇無法上傳中文檔名，測試時要先複製成英文檔名。
+- 刪除原有圖片（v2.1）：`peLex()` 解析頁面內容，`peFindImages()` 找出每個畫圖片指令（含子圖層 Form 裡的）的位置；識別碼＝第幾個 Do/BI 指令，子圖層用 `5.2` 表示，存在頁面的 `pg.del`。偵測與刪除（`peStripImages()`）用同一套解析，永遠從**原始來源檔**算，不會因為刪過而錯位。子圖層與資源會先複製再改，不影響共用同一子圖層的其他頁；不再用到的圖片從資源拿掉，匯出前 `peGC()` 清掉沒人引用的物件，圖片才真的不在檔案裡。畫面用 `peSrcPage()` 產生刪除後的單頁版本顯示。橫跨整頁寬或高的圖片（掃描底圖、掃描條）不列出；重疊時依原本畫圖順序，最上面的點得到。
+- 清除原有註解：頁面 `pg.noAnn = true`，畫面用 pdf.js `AnnotationMode.DISABLE`，匯出時刪 `/Annots`。`peSig(pg)` 是 del＋noAnn 的簽名，縮圖快取與復原後重畫都看它。
+- 文字框格式：`bold`、`italic`、`underline`、`align`、`fill`（底色，null＝無）、`bcolor`（框線色，沒有時沿用 `color`）。`字型\` 檔名含 Bold／粗 的當粗體字型（`PE.fkB`）；有一般字型但沒粗體字型時用描邊加粗（`peFakeBold`）。斜體＝傾斜 `PE_ITAL`，畫面用 transform、匯出直接算在字形路徑上。
+- 圖片標註 `{type:'img', key, x, y, w, h, r}`：圖片資料放在 `PE.imgs[key]`（不放進復原紀錄），編輯紀錄 ver 2 存在 `img/N.png|jpg`。去白底 `peKnockout()`。印章庫＝系統資料夾 `印章庫\`（PNG/JPG＋`印章庫.json` 記預設寬度公分），同事共用；不可放進 GitHub。
+- 匯出檔名在匯出視窗裡填（`.modal .pe-name`），上方工具列不再有檔名欄。
+- 測試注意：Playwright 的檔案選擇無法上傳中文檔名，測試時要先複製成英文檔名。e2e 會套用一次「更新」，`/tmp/fire-e2e/home/cache/app.html` 會留下舊程式；自己另外測試時要先刪掉它，否則開的是舊版。
 
 ## 我的案件（案件存檔與修正重新產出）
 - 清單存在系統資料夾 `案件紀錄\<使用者名稱>.json`（每人一份），每筆含 `id`（= 案件資料的 `caseId`）、資料夾名稱與路徑、完整案件資料快照。

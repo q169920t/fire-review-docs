@@ -208,6 +208,27 @@ main.pe-main{padding:0;overflow:hidden;display:flex;flex-direction:column}
 .pe-busy{position:fixed;inset:0;background:rgba(20,24,30,.35);z-index:70;display:flex;align-items:center;justify-content:center}
 .pe-busy div{background:#fff;border-radius:12px;padding:20px 30px;font-size:15px;box-shadow:0 10px 40px rgba(0,0,0,.25)}
 body:has(main.pe-main){overflow:hidden}
+/* v2.1：刪除原有圖片、插入圖片、印章庫、文字格式 */
+.pe-ov.t-obj{cursor:default}
+.pe-ov .pe-obj{fill:rgba(212,32,44,.04);stroke:#d4202c;cursor:pointer;pointer-events:all}
+.pe-ov .pe-obj:hover{fill:rgba(212,32,44,.25)}
+.pe-ov image{pointer-events:none}
+.pe-sw.none{background:linear-gradient(135deg,#fff 44%,#d4202c 44%,#d4202c 56%,#fff 56%)}
+.pe-fn{display:flex;align-items:center;gap:8px;margin:0 0 12px}
+.pe-fn .pe-name{flex:1;width:auto;min-width:0}
+.pe-checker{background:repeating-conic-gradient(#e4e7ec 0 25%,#fff 0 50%) 0 0/14px 14px}
+.pe-imgprev{display:block;margin:0 auto 12px;max-width:100%;border:1px solid var(--line)}
+.pe-imgopt{display:flex;align-items:center;gap:8px;margin:8px 0;flex-wrap:wrap}
+.pe-imgopt input[type=number]{width:72px}
+.pe-stamps{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;max-height:56vh;overflow:auto;padding:2px}
+.pe-stamp{position:relative;border:1px solid var(--line);border-radius:8px;padding:8px;cursor:pointer;text-align:center;background:#fff}
+.pe-stamp:hover{border-color:#3b7cf0;box-shadow:0 0 0 2px #dbe7fd}
+.pe-stamp img{width:100%;height:96px;object-fit:contain;border-radius:4px}
+.pe-stamp .nm{font-size:13px;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pe-stamp .sz{font-size:12px;color:var(--muted)}
+.pe-stamp .del{position:absolute;top:4px;right:4px;border:0;background:rgba(255,255,255,.9);border-radius:50%;width:24px;height:24px;cursor:pointer;color:#888;font-size:15px;line-height:1}
+.pe-stamp .del:hover{color:#d4202c;background:#fde8e8}
+.pe-modal-wide{width:min(760px,94vw)}
 /* PE-CSS-END */
 </style>
 </head>
@@ -248,7 +269,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const SETTINGS_FILE = '系統設定.json';
 const CASE_FILE = '案件資料.json';
-const APP_VERSION = '2.0';
+const APP_VERSION = '2.1';
 const TPL_DIR = 'templates';
 const BAD_CHARS = /[\\/:*?"<>|]/;
 const $ = s => document.querySelector(s);
@@ -2021,22 +2042,35 @@ const PE_IC = {
   zout: '<circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="M16 16l4 4M8 11h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>',
   border: '<rect x="4" y="5" width="16" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="3 2"/><path d="M8 10h8M8 14h5" stroke="currentColor" stroke-width="2"/>',
+  objdel: '<rect x="3" y="5" width="13" height="11" rx="1" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M5 14l3-3 3 3 2-2 3 3" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/><path d="M16 15l5 5M21 15l-5 5" stroke="#d4202c" stroke-width="2.2" stroke-linecap="round"/>',
+  image: '<rect x="3" y="5" width="18" height="14" rx="1.5" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="8.5" cy="10" r="1.7" fill="currentColor"/><path d="M4 18l5-5 4 4 3-3 4 4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linejoin="round"/>',
+  stamp: '<circle cx="12" cy="9" r="5.5" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M9.3 7.6h5.4M12 6.5v5M9.5 10.6h5" stroke="currentColor" stroke-width="1.3"/><path d="M5 20h14M7 17h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  bold: '<path d="M7 5h5.5a3.5 3.5 0 0 1 0 7H7zM7 12h6.5a3.5 3.5 0 0 1 0 7H7z" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linejoin="round"/>',
+  italic: '<path d="M10 5h8M6 19h8M14 5l-4 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  underline: '<path d="M7 4v7a5 5 0 0 0 10 0V4M5 20h14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>',
+  alignl: '<path d="M4 6h16M4 10h10M4 14h16M4 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  alignc: '<path d="M4 6h16M7 10h10M4 14h16M7 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  alignr: '<path d="M4 6h16M10 10h10M4 14h16M10 18h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z M14 3v5h5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/><path d="M9 14h6M12 11v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>'
 };
 const peIcon = (k, size) => h('span', { html: `<svg viewBox="0 0 24 24"${size ? ` width="${size}" height="${size}"` : ''}>${PE_IC[k]}</svg>`, style: 'display:inline-flex' });
 const PE_TOOLS = [['select', '選取、移動（V）', 'v'], ['text', '文字框（T）', 't'], ['rect', '框線（R）', 'r'], ['ellipse', '圓圈（O）', 'o'], ['cloud', '雲朵線（C）', 'c'],
-  ['line', '直線（L）', 'l'], ['arrow', '箭頭（A）', 'a'], ['pen', '手寫筆（P）', 'p'], ['hl', '螢光筆（H）', 'h'], ['eraser', '橡皮擦：點一下或拖過標註就刪除（E）', 'e']];
+  ['line', '直線（L）', 'l'], ['arrow', '箭頭（A）', 'a'], ['pen', '手寫筆（P）', 'p'], ['hl', '螢光筆（H）', 'h'], ['eraser', '橡皮擦：點一下或拖過標註就刪除（E）', 'e'],
+  ['image', '插入圖片（I）', 'i'], ['stamp', '印章庫：蓋常用的簽章、印章（S）', 's'], ['objdel', '刪除原有圖片：點頁面上原本就有的簽章、印章等圖片就刪除（D）', 'd']];
+const PE_FILLS = ['#ffffff', '#fff3a0', '#ffd9d9', '#d9e8ff', '#dcf3dc', '#eeeeee'];
+const PE_ITAL = 0.21; // 斜體的傾斜量（約 12 度）
+const PE_STAMP_DIR = '印章庫', PE_STAMP_META = '印章庫.json';
 const PE_DRAW = new Set(['rect', 'ellipse', 'cloud', 'line', 'arrow', 'pen', 'hl']);
 const PE = {
   srcs: {}, pages: [], sel: new Set(), anchor: null, mode: 'grid', name: '', thumb: 150,
   tool: 'select', annSel: null, editing: null, zoom: 0, undo: [], redo: [], dirty: false, outDir: null, keepRec: true,
   styles: {
-    text: { color: '#d4202c', size: 14, border: false, width: 1, dash: 'solid' },
+    text: { color: '#d4202c', size: 14, border: false, width: 1, dash: 'solid', bold: false, italic: false, underline: false, align: 'left', fill: null, bcolor: '#d4202c' },
     rect: { color: '#d4202c', width: 2, dash: 'solid' }, ellipse: { color: '#d4202c', width: 2, dash: 'solid' },
     cloud: { color: '#d4202c', width: 1.5, dash: 'solid' }, line: { color: '#d4202c', width: 2, dash: 'solid' },
     arrow: { color: '#d4202c', width: 2, dash: 'solid' }, pen: { color: '#1a5fd0', width: 2, dash: 'solid' }, hl: { color: '#ffd400', width: 12, dash: 'solid' }
   },
-  font: undefined, fk: null, thumbs: new Map(), io: null
+  font: undefined, fk: null, fkB: null, thumbs: new Map(), io: null, imgs: {}, placing: null, stampKeys: {}
 };
 
 /* ---------- 函式庫與字型 ---------- */
@@ -2063,19 +2097,25 @@ class PeCMapFactory {
     return { cMapData: Uint8Array.from(atob(peCMaps[name]), c => c.charCodeAt(0)), compressionType: 1 };
   }
 }
-// 字型：系統資料夾\字型 裡的第一個 .otf/.ttf/.ttc。找不到時，文字框改用圖片方式匯出。
+// 字型：系統資料夾\字型 裡的 .otf/.ttf/.ttc。檔名有 Bold／粗 的當作粗體字型。找不到時，文字框改用圖片方式匯出。
 async function peLoadFont() {
   if (PE.font !== undefined) return PE.font;
-  PE.font = null;
+  PE.font = null; PE.fk = PE.fkB = null;
   try {
     const dir = S.root && await getSub(S.root, PE_FONT_DIR); if (!dir) return null;
     const names = await listFiles(dir, /\.(otf|ttf|ttc)$/i); if (!names.length) return null;
-    const buf = new Uint8Array(await (await readFile(dir, names[0])).arrayBuffer());
-    let f = fontkit.create(buf);
-    if (f.fonts) f = f.fonts.find(x => /TC|Traditional|JhengHei|繁/i.test(`${x.familyName} ${x.postscriptName}`)) || f.fonts[0];
-    PE.fk = f; PE.font = names[0];
-    if (!/\.ttc$/i.test(names[0])) { const ff = new FontFace('PdfEdTC', buf); await ff.load(); document.fonts.add(ff); }
-  } catch (e) { console.warn('字型載入失敗', e); PE.fk = null; PE.font = null; }
+    const isB = n => /bold|粗|heavy|black|semibold|W[6-9](?![0-9])/i.test(n);
+    const reg = names.find(n => !isB(n)) || names[0], bold = names.find(n => n !== reg && isB(n));
+    const load = async (n, weight) => {
+      const buf = new Uint8Array(await (await readFile(dir, n)).arrayBuffer());
+      let f = fontkit.create(buf);
+      if (f.fonts) f = f.fonts.find(x => /TC|Traditional|JhengHei|繁/i.test(`${x.familyName} ${x.postscriptName}`)) || f.fonts[0];
+      if (!/\.ttc$/i.test(n)) { const ff = new FontFace('PdfEdTC', buf, { weight }); await ff.load(); document.fonts.add(ff); }
+      return f;
+    };
+    PE.fk = await load(reg, '400'); PE.font = reg;
+    if (bold) try { PE.fkB = await load(bold, '700'); } catch (e) { console.warn('粗體字型載入失敗', e); }
+  } catch (e) { console.warn('字型載入失敗', e); PE.fk = PE.fkB = null; PE.font = null; }
   return PE.font;
 }
 
@@ -2143,8 +2183,10 @@ function peRemoveSource(id) {
   });
 }
 function peClearAll() {
-  for (const s of Object.values(PE.srcs)) try { s.doc.destroy(); } catch {}
-  Object.assign(PE, { srcs: {}, pages: [], sel: new Set(), anchor: null, annSel: null, editing: null, undo: [], redo: [], dirty: false, name: '', mode: 'grid' });
+  for (const s of Object.values(PE.srcs)) { try { s.doc.destroy(); } catch {} if (s.der) for (const d of s.der.values()) d.then(x => x.destroy()).catch(() => {}); }
+  for (const im of Object.values(PE.imgs)) try { URL.revokeObjectURL(im.url); } catch {}
+  if (PE.tool === 'place' || PE.tool === 'objdel') PE.tool = 'select';
+  Object.assign(PE, { srcs: {}, pages: [], sel: new Set(), anchor: null, annSel: null, editing: null, undo: [], redo: [], dirty: false, name: '', mode: 'grid', imgs: {}, placing: null, stampKeys: {}, editY: null, zoom: 0 });
   PE.thumbs.clear();
 }
 
@@ -2154,11 +2196,13 @@ function peUndo(redo) {
   peCommitText();
   const from = redo ? PE.redo : PE.undo, to = redo ? PE.undo : PE.redo;
   if (!from.length) return;
+  const sig0 = Object.fromEntries(PE.pages.map(p => [p.id, peSig(p)]));
   to.push(JSON.stringify(PE.pages)); PE.pages = JSON.parse(from.pop());
   PE.annSel = null; PE.dirty = true;
   const ids = new Set(PE.pages.map(p => p.id)); PE.sel = new Set([...PE.sel].filter(i => ids.has(i)));
   if (PE.mode === 'edit' && $('#pePages') && $('#pePages').children.length === PE.pages.length && PE.pages.every((p, i) => $('#pePages').children[i].dataset.pid === p.id && $('#pePages').children[i].dataset.rot == p.rot)) {
     PE.pages.forEach(peDrawAnns); peToolbar();
+    PE.pages.forEach(p => { if (sig0[p.id] !== peSig(p)) peRefreshCanvas(p); });
   } else peRender();
 }
 
@@ -2221,7 +2265,17 @@ function peParts(a) {
     case 'arrow': return peArrowParts(a);
     case 'pen': return [{ d: pePenPath(a.pts), stroke: true, cap: 'round' }];
     case 'hl': return [{ d: pePenPath(a.pts), stroke: true, cap: 'round', opacity: 0.4 }];
-    case 'text': return a.border ? [{ d: peRectPath(a.x, a.y, a.w, peTextH(a)), stroke: true, cap, closed: true }] : [];
+    case 'text': {
+      const th = peTextH(a), r = [];
+      if (a.fill) r.push({ d: peRectPath(a.x, a.y, a.w, th), fill: true, color: a.fill });
+      if (a.underline) peTextLines(a).forEach((l, i) => {
+        const t = l.replace(/\s+$/, ''); if (!t) return;
+        r.push({ d: peRectPath(peLineX(a, t), peBaseY(a, i) + a.size * 0.12, peMeasure(t, a.size, a.bold), Math.max(0.5, a.size * 0.06)), fill: true, color: a.color });
+      });
+      if (a.border) r.push({ d: peRectPath(a.x, a.y, a.w, th), stroke: true, cap, closed: true, color: a.bcolor || a.color });
+      return r;
+    }
+    case 'img': return [];
   }
   return [];
 }
@@ -2237,20 +2291,21 @@ function peBBox(a) {
 
 /* ---------- 文字排版（畫面與匯出用同一套斷行） ---------- */
 let peMeasureCtx = null;
-function peMeasure(str, size) {
-  if (PE.fk) { try { return PE.fk.layout(str).advanceWidth * size / PE.fk.unitsPerEm; } catch {} }
+function peMeasure(str, size, bold) {
+  const f = bold && PE.fkB ? PE.fkB : PE.fk;
+  if (f) { try { return f.layout(str).advanceWidth * size / f.unitsPerEm; } catch {} }
   if (!peMeasureCtx) peMeasureCtx = document.createElement('canvas').getContext('2d');
-  peMeasureCtx.font = `${size}px ${PE_FONT_STACK}`; return peMeasureCtx.measureText(str).width;
+  peMeasureCtx.font = `${bold ? 'bold ' : ''}${size}px ${PE_FONT_STACK}`; return peMeasureCtx.measureText(str).width;
 }
-function peWrap(text, size, maxW) {
-  const out = [];
+function peWrap(text, size, maxW, bold) {
+  const out = [], M = (t, z) => peMeasure(t, z, bold);
   for (const para of String(text || '').split('\n')) {
     const toks = para.match(/[A-Za-z0-9.,:;'"!?()\-_/@#%&+=]+|\s|[\s\S]/g) || [];
     let line = '';
     for (const t of toks) {
-      if (peMeasure(line + t, size) <= maxW || !line) {
-        if (!line && peMeasure(t, size) > maxW && t.length > 1) { // 單字太長：逐字拆
-          for (const ch of t) { if (line && peMeasure(line + ch, size) > maxW) { out.push(line); line = ''; } line += ch; }
+      if (M(line + t, size) <= maxW || !line) {
+        if (!line && M(t, size) > maxW && t.length > 1) { // 單字太長：逐字拆
+          for (const ch of t) { if (line && M(line + ch, size) > maxW) { out.push(line); line = ''; } line += ch; }
         } else line += t;
       } else if (/^[，。、；：！？）」』〕】》〉,.;:!?)]$/.test(t) && line.length > 1) { // 標點不放行首：前一個字一起換行
         const ch = Array.from(line), last = ch.pop(); out.push(ch.join('')); line = last + t;
@@ -2260,7 +2315,15 @@ function peWrap(text, size, maxW) {
   }
   return out;
 }
-const peTextLines = a => peWrap(a.text, a.size, Math.max(4, a.w - 2 * PE_PAD));
+const peTextLines = a => peWrap(a.text, a.size, Math.max(4, a.w - 2 * PE_PAD), a.bold);
+const peBaseY = (a, i) => { const lh = a.size * PE_LH; return a.y + PE_PAD + i * lh + (lh - a.size) / 2 + a.size * PE_BASE; };
+function peLineX(a, line) { // 依對齊方式算每行起點
+  if (!a.align || a.align === 'left') return a.x + PE_PAD;
+  const lw = peMeasure(String(line).replace(/\s+$/, ''), a.size, a.bold);
+  return a.align === 'center' ? a.x + (a.w - lw) / 2 : a.x + a.w - PE_PAD - lw;
+}
+// 有一般字型但沒有粗體字型時，粗體用「描邊加粗」，畫面與匯出一致
+const peFakeBold = a => !!(a.bold && PE.fk && !PE.fkB);
 const peTextH = a => peTextLines(a).length * a.size * PE_LH + 2 * PE_PAD;
 
 /* ---------- 標註繪製（SVG） ---------- */
@@ -2269,17 +2332,25 @@ function peAnnSvg(a, z, pick) {
   let s = `<g data-aid="${a.id}">`;
   for (const p of parts) {
     const da = dash && a.type !== 'hl' ? ` stroke-dasharray="${dash.join(' ')}"` : '';
-    s += p.fill ? `<path d="${p.d}" fill="${a.color}"/>`
-      : `<path d="${p.d}" fill="none" stroke="${a.color}" stroke-width="${a.width}" stroke-linecap="${a.dash === 'dot' ? 'round' : p.cap}" stroke-linejoin="round"${p.opacity ? ` stroke-opacity="${p.opacity}"` : ''}${da}/>`;
+    s += p.fill ? `<path d="${p.d}" fill="${p.color || a.color}"/>`
+      : `<path d="${p.d}" fill="none" stroke="${p.color || a.color}" stroke-width="${a.width}" stroke-linecap="${a.dash === 'dot' ? 'round' : p.cap}" stroke-linejoin="round"${p.opacity ? ` stroke-opacity="${p.opacity}"` : ''}${da}/>`;
   }
   if (a.type === 'text' && PE.editing !== a.id) {
-    const lines = peTextLines(a), lh = a.size * PE_LH;
-    s += `<text class="pe-txt" font-size="${a.size}" fill="${a.color}" xml:space="preserve">` + lines.map((l, i) =>
-      `<tspan x="${pf(a.x + PE_PAD)}" y="${pf(a.y + PE_PAD + i * lh + (lh - a.size) / 2 + a.size * PE_BASE)}">${esc(l)}</tspan>`).join('') + '</text>';
+    const k = a.italic ? PE_ITAL : 0, fb = peFakeBold(a);
+    const at = `font-size="${a.size}" fill="${a.color}"${a.bold && !fb ? ' font-weight="bold"' : ''}${fb ? ` stroke="${a.color}" stroke-width="${pf(a.size * 0.04)}" stroke-linejoin="round"` : ''}`;
+    s += peTextLines(a).map((l, i) => {
+      if (!l) return ''; const by = peBaseY(a, i);
+      return `<text class="pe-txt" ${at} x="${pf(peLineX(a, l))}" y="${pf(by)}"${k ? ` transform="matrix(1 0 ${-k} 1 ${pf(k * by)} 0)"` : ''} xml:space="preserve">${esc(l)}</text>`;
+    }).join('');
+  }
+  if (a.type === 'img') {
+    const im = PE.imgs[a.key], r = a.r || 0, iw = r % 180 ? a.h : a.w, ih = r % 180 ? a.w : a.h;
+    s += im ? `<g transform="translate(${pf(a.x + a.w / 2)} ${pf(a.y + a.h / 2)}) rotate(${r})"><image href="${im.url}" x="${pf(-iw / 2)}" y="${pf(-ih / 2)}" width="${pf(iw)}" height="${pf(ih)}" preserveAspectRatio="none"/></g>`
+      : `<rect x="${pf(a.x)}" y="${pf(a.y)}" width="${pf(a.w)}" height="${pf(a.h)}" fill="#f3f3f3" stroke="#d4202c" stroke-dasharray="4 3"/>`;
   }
   if (pick) {
     const hw = pf(Math.max(a.width || 0, 0) + 10 / z);
-    if (a.type === 'text') { const b = peBBox(a); s += `<rect class="hit" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="transparent" pointer-events="all"/>`; }
+    if (a.type === 'text' || a.type === 'img') { const b = peBBox(a); s += `<rect class="hit" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="transparent" pointer-events="all"/>`; }
     else for (const p of parts) s += p.closed ? `<path class="hit" d="${p.d}" fill="transparent" stroke="transparent" stroke-width="${hw}" pointer-events="all"/>`
       : `<path class="hit" d="${p.d}" fill="none" stroke="transparent" stroke-width="${hw}" stroke-linecap="round" pointer-events="stroke"/>`;
   }
@@ -2291,7 +2362,7 @@ function peHandles(a, z) {
   let s = `<g class="pe-selui"><rect x="${pf(b.x - m)}" y="${pf(b.y - m)}" width="${pf(b.w + 2 * m)}" height="${pf(b.h + 2 * m)}" fill="none" stroke="#3b7cf0" stroke-width="${sw}" stroke-dasharray="${pf(4 / z)} ${pf(3 / z)}" pointer-events="none"/>`;
   if (a.type === 'line' || a.type === 'arrow') s += hd('p1', a.x1, a.y1) + hd('p2', a.x2, a.y2);
   else if (a.type === 'text') s += hd('w', b.x, b.y + b.h / 2) + hd('e', b.x + b.w, b.y + b.h / 2);
-  else if (a.type === 'rect' || a.type === 'ellipse' || a.type === 'cloud')
+  else if (a.type === 'rect' || a.type === 'ellipse' || a.type === 'cloud' || a.type === 'img')
     s += hd('nw', b.x, b.y) + hd('n', b.x + b.w / 2, b.y) + hd('ne', b.x + b.w, b.y) + hd('e', b.x + b.w, b.y + b.h / 2) +
       hd('se', b.x + b.w, b.y + b.h) + hd('s', b.x + b.w / 2, b.y + b.h) + hd('sw', b.x, b.y + b.h) + hd('w', b.x, b.y + b.h / 2);
   return s + '</g>';
@@ -2303,6 +2374,7 @@ function peSvgInner(pg, z, interactive) {
   if (interactive && PE.annSel && PE.annSel.pid === pg.id && PE.tool === 'select') {
     const a = pg.anns.find(x => x.id === PE.annSel.aid); if (a && PE.editing !== a.id) s += peHandles(a, z);
   }
+  if (interactive && PE.tool === 'objdel') s += peObjSvg(pg, z);
   return s;
 }
 function peDrawAnns(pg) {
@@ -2327,9 +2399,8 @@ function peRender() {
       h('button', { class: PE.mode === 'edit' ? 'on' : '', onclick: () => peSetMode('edit') }, '標註編輯')) : null,
     h('button', { class: 'btn', onclick: () => pePickFiles() }, '＋ 加入 PDF'),
     h('button', { class: 'btn', onclick: () => pePickFiles('.pdfedit', false) }, '開啟編輯紀錄'),
+    has ? h('button', { class: 'btn', id: 'peStripAnn', title: '把 PDF 原本就有的註解、批註、連結、表單欄位全部清除', onclick: () => peStripAnnots() }, '清除原有註解') : null,
     h('span', { class: 'pe-sp' }),
-    has ? h('label', { class: 'muted', style: 'display:flex;align-items:center;gap:6px' }, '檔名',
-      h('input', { type: 'text', class: 'pe-name', value: PE.name, placeholder: '匯出的檔名', oninput: e => { PE.name = e.target.value; } })) : null,
     has ? h('button', { class: 'btn', title: '把目前的合併與標註存成編輯紀錄檔，之後可以再打開繼續修改', onclick: () => peSaveRecordOnly() }, '存編輯紀錄') : null,
     has ? h('button', { class: 'btn primary', id: 'peExport', onclick: () => peExport() }, '匯出 PDF') : null,
     has ? h('button', { class: 'btn small', title: '清除目前的全部內容，重新開始', onclick: async () => { if (!PE.dirty || await confirmBox('全部清除', '目前的合併與標註會全部清除（已匯出的檔案不受影響）。確定嗎？', '清除')) { peClearAll(); peRender(); } } }, '清除') : null].filter(Boolean));
@@ -2387,13 +2458,13 @@ async function peRenderTo(canvas, pg, scale) {
   canvas.width = Math.max(1, Math.round(W * scale)); canvas.height = Math.max(1, Math.round(H * scale));
   const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
   if (!pg.src) return canvas;
-  const p = await PE.srcs[pg.src].doc.getPage(pg.idx + 1);
+  const p = await peSrcPage(pg);
   const vp = p.getViewport({ scale: canvas.width / W, rotation: t });
-  await p.render({ canvasContext: ctx, viewport: vp }).promise;
+  await p.render({ canvasContext: ctx, viewport: vp, annotationMode: pg.noAnn ? pdfjsLib.AnnotationMode.DISABLE : pdfjsLib.AnnotationMode.ENABLE }).promise;
   return canvas;
 }
 function peThumb(pg, wpx) {
-  const key = `${pg.src}|${pg.idx}|${pg.rot}|${wpx}`;
+  const key = `${pg.src}|${pg.idx}|${pg.rot}|${wpx}|${peSig(pg)}`;
   let c = PE.thumbs.get(key);
   if (!c) {
     const { W } = peDims(pg), dpr = window.devicePixelRatio || 1;
@@ -2544,7 +2615,7 @@ function peRotAnn(a, W, H) { // 順時針 90°
   if (a.type === 'line' || a.type === 'arrow') { [a.x1, a.y1] = P(a.x1, a.y1); [a.x2, a.y2] = P(a.x2, a.y2); }
   else if (a.type === 'pen' || a.type === 'hl') a.pts = a.pts.map(p => P(p[0], p[1]));
   else if (a.type === 'text') { const th = peTextH(a), [cx, cy] = P(a.x + a.w / 2, a.y + th / 2); a.x = cx - a.w / 2; a.y = cy - th / 2; }
-  else { const [nx, ny] = P(a.x, a.y + a.h); a.x = nx; a.y = ny; [a.w, a.h] = [a.h, a.w]; }
+  else { const [nx, ny] = P(a.x, a.y + a.h); a.x = nx; a.y = ny; [a.w, a.h] = [a.h, a.w]; if (a.type === 'img') a.r = ((a.r || 0) + 90) % 360; }
 }
 function peRotate(ids, deg) {
   if (!ids.length) return;
@@ -2607,7 +2678,7 @@ function peEditView(body) {
 }
 function peOvClass(ov) {
   const t = PE.tool;
-  ov.setAttribute('class', 'pe-ov' + (t === 'select' || t === 'eraser' ? ' pick' : '') + (t === 'text' ? ' t-text' : PE_DRAW.has(t) ? ' t-draw' : t === 'eraser' ? ' t-eraser' : ''));
+  ov.setAttribute('class', 'pe-ov' + (t === 'select' || t === 'eraser' ? ' pick' : '') + (t === 'text' ? ' t-text' : PE_DRAW.has(t) || t === 'place' ? ' t-draw' : t === 'eraser' ? ' t-eraser' : t === 'objdel' ? ' t-obj' : ''));
 }
 async function peLazy(el, vis) {
   const c = el.querySelector('canvas'), pg = pePage(el.dataset.pid); if (!pg) return;
@@ -2656,32 +2727,51 @@ function peSetStyle(k, v) {
   } else cur.st[k] = v;
   peToolbar();
 }
+function peSwatches(k, cur, list, title, none) {
+  const out = list.map(c => h('button', { class: 'pe-sw' + (cur && cur.toLowerCase() === c ? ' on' : ''), title, style: `background:${c}`, onclick: () => peSetStyle(k, c) }));
+  if (none) out.unshift(h('button', { class: 'pe-sw none' + (!cur ? ' on' : ''), title: '無' + title, onclick: () => peSetStyle(k, null) }));
+  out.push(h('input', { type: 'color', class: 'pe-cc', title: '其他' + title, value: cur || '#ffffff', onchange: e => peSetStyle(k, e.target.value) }));
+  return out;
+}
 function peToolbar() {
   const tb = $('#peTb'); if (!tb) return;
   tb.innerHTML = '';
+  const onTool = id => PE.tool === id || (PE.tool === 'place' && PE.placing && PE.placing.from === id);
   const g1 = h('div', { class: 'pe-tg' }, PE_TOOLS.map(([id, tip]) =>
-    h('button', { class: 'pe-ib' + (PE.tool === id ? ' on' : ''), title: tip, 'data-tool': id, onclick: () => peSetTool(id) }, peIcon(id))));
+    h('button', { class: 'pe-ib' + (onTool(id) ? ' on' : ''), title: tip, 'data-tool': id, onclick: () => peSetTool(id) }, peIcon(id))));
   const cur = peCurStyle(); const st = cur && cur.st, key = cur && cur.key;
-  const g2 = h('div', { class: 'pe-tg' });
-  if (st) {
-    g2.append(...PE_COLORS.map(c => h('button', { class: 'pe-sw' + (st.color.toLowerCase() === c ? ' on' : ''), title: '顏色', style: `background:${c}`, onclick: () => peSetStyle('color', c) })),
-      h('input', { type: 'color', class: 'pe-cc', title: '其他顏色', value: st.color, onchange: e => peSetStyle('color', e.target.value) }));
-  }
-  const g3 = h('div', { class: 'pe-tg' });
+  const lbl = t => h('span', { class: 'lbl' }, t), note = t => h('span', { class: 'muted', style: 'padding:0 6px' }, t);
+  const tog = (k, icon, tip) => h('button', { class: 'pe-ib' + (st[k] ? ' on' : ''), title: tip, onclick: () => peSetStyle(k, !st[k]) }, peIcon(icon));
+  const g2 = h('div', { class: 'pe-tg' }), g3 = h('div', { class: 'pe-tg' }), g6 = h('div', { class: 'pe-tg' }), g7 = h('div', { class: 'pe-tg' });
+  if (st && key !== 'img') { if (key === 'text') g2.append(lbl('字色')); g2.append(...peSwatches('color', st.color, PE_COLORS, '顏色')); }
   if (st && key === 'text') {
-    g3.append(h('span', { class: 'lbl' }, '字級'),
+    g3.append(lbl('字級'),
       h('select', { title: '字的大小', onchange: e => peSetStyle('size', +e.target.value) }, PE_SIZES.map(s => h('option', { value: s, selected: s === st.size }, s + ' pt'))),
-      h('button', { class: 'pe-ib' + (st.border ? ' on' : ''), title: '文字框加外框', onclick: () => peSetStyle('border', !st.border) }, peIcon('border')));
+      tog('bold', 'bold', '粗體'), tog('italic', 'italic', '斜體'), tog('underline', 'underline', '底線'),
+      ...[['left', 'alignl', '靠左'], ['center', 'alignc', '置中'], ['right', 'alignr', '靠右']].map(([v, ic, tip]) =>
+        h('button', { class: 'pe-ib' + ((st.align || 'left') === v ? ' on' : ''), title: tip, onclick: () => peSetStyle('align', v) }, peIcon(ic))));
+    g6.append(lbl('底色'), ...peSwatches('fill', st.fill, PE_FILLS, '底色', true));
+    g7.append(h('button', { class: 'pe-ib' + (st.border ? ' on' : ''), title: '文字框加外框', onclick: () => peSetStyle('border', !st.border) }, peIcon('border')));
+    if (st.border) g7.append(lbl('框色'), ...peSwatches('bcolor', st.bcolor || st.color, PE_COLORS, '框線顏色'));
   }
-  if (st && (key !== 'text' || st.border)) {
-    g3.append(h('span', { class: 'lbl' }, key === 'text' ? '框線' : '粗細'), ...(key === 'hl' ? [6, 10, 14, 20, 28] : PE_WIDTHS).map(w =>
+  const gw = key === 'text' ? g7 : g3;
+  if (st && key !== 'img' && (key !== 'text' || st.border)) {
+    gw.append(lbl(key === 'text' ? '框線' : '粗細'), ...(key === 'hl' ? [6, 10, 14, 20, 28] : PE_WIDTHS).map(w =>
       h('button', { class: 'pe-wb' + (st.width === w ? ' on' : ''), title: `粗細 ${w}`, onclick: () => peSetStyle('width', w),
         html: `<svg width="26" height="20"><line x1="3" y1="10" x2="23" y2="10" stroke="#3a414b" stroke-width="${Math.min(key === 'hl' ? w / 2.2 : w, 12)}" stroke-linecap="round"/></svg>` })));
-    if (key !== 'hl') g3.append(h('span', { class: 'lbl', style: 'margin-left:6px' }, '線型'), ...[['solid', '實線', ''], ['dash', '虛線', '6 4'], ['dot', '點線', '0.1 4']].map(([v, tip, da]) =>
+    if (key !== 'hl') gw.append(lbl('線型'), ...[['solid', '實線', ''], ['dash', '虛線', '6 4'], ['dot', '點線', '0.1 4']].map(([v, tip, da]) =>
       h('button', { class: 'pe-wb' + (st.dash === v ? ' on' : ''), title: tip, onclick: () => peSetStyle('dash', v),
         html: `<svg width="30" height="20"><line x1="4" y1="10" x2="26" y2="10" stroke="#3a414b" stroke-width="2.4" stroke-linecap="${v === 'dot' ? 'round' : 'butt'}" stroke-dasharray="${da}"/></svg>` })));
   }
-  if (!st) g2.append(h('span', { class: 'muted', style: 'padding:0 6px' }, PE.tool === 'eraser' ? '點一下或拖過標註即可刪除' : '點選標註可移動、調整；點兩下文字框可修改文字'));
+  if (key === 'img') g2.append(note('拖曳角落調整大小（維持比例；按住 Shift 可自由調整）'), h('button', { class: 'pe-ib', title: '圖片轉 90°', onclick: () => peImgRotate() }, peIcon('rotr')));
+  if (!st) {
+    if (PE.tool === 'objdel') {
+      const n = PE.pages.reduce((s, p) => s + (p.del ? p.del.length : 0), 0);
+      g2.append(note('紅色虛線框是頁面上原本就有的圖片，點一下就刪除（例如簽章、印章）'));
+      if (n) g2.append(h('button', { class: 'btn small', onclick: () => peObjRestoreAll() }, `還原已刪除的 ${n} 個圖片`));
+    } else if (PE.tool === 'place' && PE.placing) g2.append(note(`在頁面上點一下放置「${PE.placing.name || '圖片'}」，拖曳可指定大小；可以連續蓋，按 Esc 結束`));
+    else g2.append(note(PE.tool === 'eraser' ? '點一下或拖過標註即可刪除' : '點選標註可移動、調整；點兩下文字框可修改文字'));
+  }
   const sel = peSelAnn();
   const g4 = h('div', { class: 'pe-tg' },
     h('button', { class: 'pe-ib', title: '復原（Ctrl+Z）', disabled: !PE.undo.length, onclick: () => peUndo(false) }, peIcon('undo')),
@@ -2693,9 +2783,9 @@ function peToolbar() {
     h('button', { class: 'pe-ib', title: '放大', onclick: () => peZoom(1.2) }, peIcon('zin')),
     h('button', { class: 'pe-ib', title: '符合寬度', onclick: () => peZoom('fit') }, peIcon('fit')),
     h('span', { class: 'pe-zoom', id: 'pePgNo', style: 'min-width:70px' }));
-  const r1 = h('div', { class: 'pe-tr' }, g1, g4, g5), r2 = h('div', { class: 'pe-tr sub' }, g2, g3);
+  const r1 = h('div', { class: 'pe-tr' }, g1, g4, g5), r2 = h('div', { class: 'pe-tr sub' }, g2, g3, g6, g7);
   if (PE.font === null) r1.append(h('span', { class: 'pe-note', title: `把中文字型檔（.otf 或 .ttf）放在系統資料夾的「${PE_FONT_DIR}」資料夾裡，文字就會以向量方式匯出。` }, '未找到字型檔：文字框會以圖片方式匯出'));
-  [g2, g3, g4, g5].forEach(g => { if (!g.children.length) g.remove(); });
+  [g2, g3, g4, g5, g6, g7].forEach(g => { if (!g.children.length) g.remove(); });
   tb.append(r1, r2);
   peToolbarPage();
 }
@@ -2707,8 +2797,11 @@ function peToolbarPage() {
   el.textContent = `${k + 1} / ${ps.length} 頁`;
 }
 function peSetTool(t) {
+  if (t === 'image') { peInsertImage(); return; }
+  if (t === 'stamp') { peStampLib(); return; }
   peCommitText();
-  PE.tool = t; if (t !== 'select') PE.annSel = null;
+  if (t === 'objdel' && !PE.objReady) { peObjPrepare().then(ok => { if (ok) { PE.objReady = true; peSetTool('objdel'); PE.objReady = false; } }); return; }
+  PE.tool = t; if (t !== 'select') PE.annSel = null; if (t !== 'place') PE.placing = null;
   document.querySelectorAll('.pe-ov').forEach(peOvClass);
   PE.pages.forEach(peDrawAnns); peToolbar();
 }
@@ -2748,6 +2841,24 @@ function peDown(e, pg, ov) {
       peDragAnn(a, orig, mode, p, dx, dy, ev.shiftKey); peDrawAnns(pg);
     };
     onUp = () => { if (pushed) peToolbar(); };
+  } else if (t === 'objdel') {
+    const r = e.target.closest('[data-ok]'); if (!r) return;
+    pePush(); pg.del = [...(pg.del || []), r.dataset.ok];
+    peDrawAnns(pg); peRefreshCanvas(pg); peToolbar(); toast('已刪除這個圖片（Ctrl+Z 可復原）');
+    return;
+  } else if (t === 'place') {
+    const P = PE.placing, im = P && PE.imgs[P.key]; if (!im) return;
+    const ar = im.nh / im.nw, a = { id: peId(), type: 'img', key: P.key, x: p0[0], y: p0[1], w: 0, h: 0, r: 0 };
+    PE.draft = { pid: pg.id, ann: a };
+    onMove = ev => {
+      const p = pePt(ev, ov), w = Math.abs(p[0] - p0[0]);
+      a.w = w; a.h = w * ar; a.x = p[0] < p0[0] ? p0[0] - w : p0[0]; a.y = p[1] < p0[1] ? p0[1] - a.h : p0[1]; peDrawAnns(pg);
+    };
+    onUp = () => {
+      PE.draft = null;
+      if (a.w * PE.zoom < 8) { a.w = P.w; a.h = P.w * ar; a.x = p0[0] - a.w / 2; a.y = p0[1] - a.h / 2; }
+      pePush(); pg.anns.push(a); peDrawAnns(pg); peToolbar();
+    };
   } else if (t === 'eraser') {
     const kill = target => {
       const aEl = target && target.closest && target.closest('.pe-page [data-aid]'); if (!aEl) return;
@@ -2811,6 +2922,10 @@ function peDragAnn(a, o, mode, p, dx, dy, shift) {
     if (mode === 'w') { const w = Math.max(20, o.w - dx); a.x = o.x + o.w - w; a.w = w; }
     return;
   }
+  if (a.type === 'img' && mode.length === 2 && !shift) { // 圖片拖角落：維持比例
+    const ar = o.h / o.w, w = Math.max(6, mode.includes('e') ? o.w + dx : o.w - dx), hh = w * ar;
+    a.w = w; a.h = hh; a.x = mode.includes('w') ? o.x + o.w - w : o.x; a.y = mode.includes('n') ? o.y + o.h - hh : o.y; return;
+  }
   let x1 = o.x, y1 = o.y, x2 = o.x + o.w, y2 = o.y + o.h;
   if (mode.includes('w')) x1 = o.x + dx; if (mode.includes('e')) x2 = o.x + o.w + dx;
   if (mode.includes('n')) y1 = o.y + dy; if (mode.includes('s')) y2 = o.y + o.h + dy;
@@ -2827,7 +2942,9 @@ function peEditText(pg, a) {
   PE.editing = a.id; peDrawAnns(pg);
   const z = PE.zoom;
   const ta = h('textarea', { class: 'pe-ta', spellcheck: 'false', placeholder: '輸入文字…' });
-  Object.assign(ta.style, { left: (a.x * z) + 'px', top: (a.y * z) + 'px', width: (a.w * z) + 'px', fontSize: (a.size * z) + 'px', lineHeight: (a.size * PE_LH * z) + 'px', padding: (PE_PAD * z - 1.5) + 'px', color: a.color });
+  Object.assign(ta.style, { left: (a.x * z) + 'px', top: (a.y * z) + 'px', width: (a.w * z) + 'px', fontSize: (a.size * z) + 'px', lineHeight: (a.size * PE_LH * z) + 'px', padding: (PE_PAD * z - 1.5) + 'px', color: a.color,
+    fontWeight: a.bold ? 'bold' : '', fontStyle: a.italic ? 'italic' : '', textDecoration: a.underline ? 'underline' : '', textAlign: a.align || 'left' });
+  if (a.fill) ta.style.background = a.fill;
   ta.value = a.text;
   const fit = () => { ta.style.height = '0px'; ta.style.height = Math.max(ta.scrollHeight, (a.size * PE_LH + 2 * PE_PAD) * z) + 'px'; };
   ta.addEventListener('input', fit);
@@ -2863,11 +2980,437 @@ document.addEventListener('keydown', e => {
     return;
   }
   if ((k === 'delete' || k === 'backspace') && PE.annSel) { e.preventDefault(); peDelAnn(); return; }
-  if (k === 'escape') { if (PE.annSel) { const pg = pePage(PE.annSel.pid); PE.annSel = null; pg && peDrawAnns(pg); peToolbar(); } return; }
+  if (k === 'escape') { if (PE.tool === 'place' || PE.tool === 'objdel') { peSetTool('select'); return; } if (PE.annSel) { const pg = pePage(PE.annSel.pid); PE.annSel = null; pg && peDrawAnns(pg); peToolbar(); } return; }
   if (!mod && !e.altKey) { const t = PE_TOOLS.find(x => x[2] === k); if (t) { e.preventDefault(); peSetTool(t[0]); } }
   if (mod && (k === '=' || k === '+')) { e.preventDefault(); peZoom(1.2); }
   if (mod && k === '-') { e.preventDefault(); peZoom(1 / 1.2); }
 });
+
+/* ---------- 原有物件（圖片）：從頁面內容找出位置、刪除 ---------- */
+// 圖片的識別碼＝它在內容裡是第幾個「畫圖片／子圖層」指令，子圖層裡的用「5.2」表示。偵測與刪除用同一套解析，結果一定對得上。
+const PE_WS = new Set([0, 9, 10, 12, 13, 32]), PE_DLM = new Set([40, 41, 60, 62, 91, 93, 123, 125, 47, 37]);
+function peLex(b) {
+  const n = b.length, ops = []; let i = 0, args = [];
+  const isEnd = c => PE_WS.has(c) || PE_DLM.has(c);
+  while (i < n) {
+    const c = b[i];
+    if (PE_WS.has(c)) { i++; continue; }
+    if (c === 37) { while (i < n && b[i] !== 10 && b[i] !== 13) i++; continue; }
+    const s = i;
+    if (c === 47) { // 名稱
+      i++; let t = ''; while (i < n && !isEnd(b[i])) t += String.fromCharCode(b[i++]);
+      args.push({ v: '/' + t.replace(/#([0-9a-fA-F]{2})/g, (_, x) => String.fromCharCode(parseInt(x, 16))), s }); continue;
+    }
+    if (c === 40) { // 字串
+      let d = 1; i++;
+      while (i < n && d) { const x = b[i++]; if (x === 92) i++; else if (x === 40) d++; else if (x === 41) d--; }
+      args.push({ v: null, s }); continue;
+    }
+    if (c === 60) {
+      if (b[i + 1] === 60) { i += 2; args.push({ v: '<<', s }); continue; }
+      while (i < n && b[i] !== 62) i++; i++; args.push({ v: null, s }); continue;
+    }
+    if (c === 62) { i += b[i + 1] === 62 ? 2 : 1; args.push({ v: '>>', s }); continue; }
+    if (c === 91 || c === 93 || c === 123 || c === 125) { i++; args.push({ v: null, s }); continue; }
+    let t = ''; while (i < n && !isEnd(b[i])) t += String.fromCharCode(b[i++]);
+    if (!t) { i++; continue; }
+    if (/^[+\-.\d]/.test(t)) { args.push({ v: parseFloat(t), s }); continue; }
+    if (t === 'true' || t === 'false' || t === 'null') { args.push({ v: null, s }); continue; }
+    const st = args.length ? args[0].s : s;
+    if (t === 'BI') { // 內嵌圖片：讀到 ID 之後的資料，直到 EI
+      const d = {}; let k = null;
+      while (i < n) {
+        while (i < n && PE_WS.has(b[i])) i++;
+        if (b[i] === 73 && b[i + 1] === 68 && (i + 2 >= n || PE_WS.has(b[i + 2]))) { i += 3; break; }
+        const ss = i; let u = '';
+        if (b[i] === 47) { i++; while (i < n && !isEnd(b[i])) u += String.fromCharCode(b[i++]); u = '/' + u; }
+        else if (b[i] === 91) { while (i < n && b[i] !== 93) i++; i++; u = '[]'; }
+        else if (b[i] === 40) { let dd = 1; i++; while (i < n && dd) { const x = b[i++]; if (x === 92) i++; else if (x === 40) dd++; else if (x === 41) dd--; } }
+        else if (b[i] === 60) { if (b[i + 1] === 60) { while (i < n && !(b[i] === 62 && b[i + 1] === 62)) i++; i += 2; } else { while (i < n && b[i] !== 62) i++; i++; } }
+        else { while (i < n && !isEnd(b[i])) u += String.fromCharCode(b[i++]); if (!u) i++; }
+        if (i === ss) i++;
+        if (k == null) k = u; else { d[k] = u; k = null; }
+      }
+      let j = i;
+      while (j < n - 1 && !(b[j] === 69 && b[j + 1] === 73 && PE_WS.has(b[j - 1]) && (j + 2 >= n || PE_WS.has(b[j + 2]) || PE_DLM.has(b[j + 2])))) j++;
+      i = Math.min(n, j + 2);
+      ops.push({ op: 'BI', s: st, e: i, w: parseFloat(d['/W'] || d['/Width']) || 0, h: parseFloat(d['/H'] || d['/Height']) || 0 });
+      args = []; continue;
+    }
+    if (t === 'q' || t === 'Q' || t === 'cm' || t === 'Do') ops.push({ op: t, s: st, e: i, a: args.map(x => x.v) });
+    args = [];
+  }
+  return ops;
+}
+const peMul = (m, n) => [m[0] * n[0] + m[1] * n[2], m[0] * n[1] + m[1] * n[3], m[2] * n[0] + m[3] * n[2], m[2] * n[1] + m[3] * n[3], m[4] * n[0] + m[5] * n[2] + n[4], m[4] * n[1] + m[5] * n[3] + n[5]];
+function peStreamBytes(ctx, obj) {
+  const L = PDFLib, o = obj instanceof L.PDFRef ? ctx.lookup(obj) : obj;
+  if (o instanceof L.PDFArray) {
+    const parts = o.asArray().map(r => peStreamBytes(ctx, r)), len = parts.reduce((s, p) => s + p.length + 1, 0), out = new Uint8Array(len);
+    let k = 0; for (const p of parts) { out.set(p, k); k += p.length; out[k++] = 10; } return out;
+  }
+  if (o instanceof L.PDFRawStream) return L.decodePDFRawStream(o).decode();
+  if (o && o.getContents) return o.getContents();
+  return new Uint8Array(0);
+}
+function peLookupDict(ctx, d, key) { const v = d && d.get(PDFLib.PDFName.of(key)); const o = v instanceof PDFLib.PDFRef ? ctx.lookup(v) : v; return o instanceof PDFLib.PDFDict ? o : null; }
+function peResources(ctx, node) { // 頁面的資源（可能繼承自上層）
+  let n = node; while (n) { const r = peLookupDict(ctx, n, 'Resources'); if (r) return r; const p = n.get(PDFLib.PDFName.of('Parent')); n = p ? ctx.lookup(p) : null; }
+  return null;
+}
+// 找出頁面上所有圖片，座標為 PDF 頁面座標（未旋轉）
+function peFindImages(ctx, node) {
+  const L = PDFLib, out = [];
+  const walk = (bytes, res, base, pre, depth) => {
+    const ops = peLex(bytes), xo = peLookupDict(ctx, res, 'XObject'); let m = base, st = [], k = 0;
+    for (const o of ops) {
+      if (o.op === 'q') st.push(m);
+      else if (o.op === 'Q') m = st.length ? st.pop() : base;
+      else if (o.op === 'cm') { if (o.a.length >= 6 && o.a.slice(-6).every(v => typeof v === 'number')) m = peMul(o.a.slice(-6), m); }
+      else if (o.op === 'Do' || o.op === 'BI') {
+        const key = pre + (k++);
+        let iw = o.w, ih = o.h;
+        if (o.op === 'Do') {
+          const nm = o.a[o.a.length - 1]; if (typeof nm !== 'string' || !xo) continue;
+          const ref = xo.get(L.PDFName.of(nm.slice(1))), x = ref instanceof L.PDFRef ? ctx.lookup(ref) : ref;
+          if (!x || !x.dict) continue;
+          const sub = x.dict.get(L.PDFName.of('Subtype'));
+          if (sub && sub.asString() === '/Form') {
+            if (depth > 5) continue;
+            const mx = x.dict.get(L.PDFName.of('Matrix')), fm = mx instanceof L.PDFArray ? mx.asArray().map(v => v.asNumber ? v.asNumber() : 0) : [1, 0, 0, 1, 0, 0];
+            try { walk(peStreamBytes(ctx, x), peLookupDict(ctx, x.dict, 'Resources') || res, peMul(fm, m), key + '.', depth + 1); } catch {}
+            continue;
+          }
+          if (!sub || sub.asString() !== '/Image') continue;
+          const gw = x.dict.get(L.PDFName.of('Width')), gh = x.dict.get(L.PDFName.of('Height'));
+          iw = gw && gw.asNumber ? gw.asNumber() : 0; ih = gh && gh.asNumber ? gh.asNumber() : 0;
+        }
+        const xs = [m[4], m[0] + m[4], m[2] + m[4], m[0] + m[2] + m[4]], ys = [m[5], m[1] + m[5], m[3] + m[5], m[1] + m[3] + m[5]];
+        out.push({ k: key, x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys), iw, ih });
+      }
+    }
+  };
+  walk(peStreamBytes(ctx, node.get(L.PDFName.of('Contents'))), peResources(ctx, node), [1, 0, 0, 1, 0, 0], '', 0);
+  return out;
+}
+// 從內容裡刪掉指定的圖片指令；子圖層會複製一份再改，不影響其他頁共用的同一個子圖層
+function peStripImages(doc, page, keys) {
+  const L = PDFLib, ctx = doc.context, node = page.node;
+  const cut = (bytes, ks) => { // ks: 這一層要刪的編號
+    const ops = peLex(bytes).filter(o => o.op === 'Do' || o.op === 'BI'), kill = ops.filter((_, i) => ks.has(String(i))).sort((a, b) => a.s - b.s);
+    if (!kill.length) return bytes;
+    const parts = []; let p = 0;
+    for (const o of kill) { if (o.s < p) continue; parts.push(bytes.subarray(p, o.s)); p = o.e; }
+    parts.push(bytes.subarray(p));
+    const out = new Uint8Array(parts.reduce((s, x) => s + x.length + 1, 0)); let k = 0;
+    for (const x of parts) { out.set(x, k); k += x.length; out[k++] = 32; }
+    return out;
+  };
+  const doLevel = (bytes, res, ks) => { // 回傳新的內容與資源；資源要改時先複製一份
+    const here = new Set(), deeper = {};
+    for (const k of ks) { const i = k.indexOf('.'); if (i < 0) here.add(k); else (deeper[k.slice(0, i)] = deeper[k.slice(0, i)] || []).push(k.slice(i + 1)); }
+    const ops = peLex(bytes).filter(o => o.op === 'Do' || o.op === 'BI'), xo = res && peLookupDict(ctx, res, 'XObject');
+    let newRes = res, nxo = null;
+    const own = () => { if (!nxo) { nxo = xo.clone(ctx); newRes = res.clone(ctx); newRes.set(L.PDFName.of('XObject'), nxo); } return nxo; };
+    const nameOf = o => { const nm = o && o.op === 'Do' && o.a[o.a.length - 1]; return typeof nm === 'string' ? L.PDFName.of(nm.slice(1)) : null; };
+    if (xo) for (const [idx, sub] of Object.entries(deeper)) {
+      const name = nameOf(ops[+idx]); if (!name) continue;
+      const ref = xo.get(name), f = ref instanceof L.PDFRef ? ctx.lookup(ref) : ref;
+      if (!f || !f.dict) continue;
+      const fres = peLookupDict(ctx, f.dict, 'Resources');
+      const r = doLevel(peStreamBytes(ctx, f), fres || res, sub);
+      const ns = ctx.flateStream(r.bytes);
+      for (const [kk, vv] of f.dict.entries()) if (!['/Filter', '/DecodeParms', '/Length', '/DL'].includes(kk.asString())) ns.dict.set(kk, vv);
+      if (r.res !== (fres || res)) ns.dict.set(L.PDFName.of('Resources'), r.res);
+      own().set(name, ctx.register(ns));
+    }
+    const out = cut(bytes, here);
+    if (xo && here.size) { // 不再用到的圖片從資源拿掉，存檔時才不會留在檔案裡
+      const left = new Set(peLex(out).filter(o => o.op === 'Do').map(o => o.a[o.a.length - 1]));
+      for (const k of here) { const name = nameOf(ops[+k]); if (name && !left.has(name.asString())) own().delete(name); }
+    }
+    return { bytes: out, res: newRes };
+  };
+  const res = peResources(ctx, node);
+  const r = doLevel(peStreamBytes(ctx, node.get(L.PDFName.of('Contents'))), res, keys);
+  node.set(L.PDFName.of('Contents'), ctx.register(ctx.flateStream(r.bytes)));
+  if (r.res && r.res !== res) node.set(L.PDFName.of('Resources'), r.res);
+}
+// 刪掉沒有被任何頁面用到的物件（被刪的圖片、註解），檔案才不會殘留
+function peGC(doc) {
+  const L = PDFLib, ctx = doc.context, seen = new Set(), stack = [ctx.trailerInfo.Root, ctx.trailerInfo.Info].filter(Boolean);
+  while (stack.length) {
+    let o = stack.pop();
+    if (o instanceof L.PDFRef) { if (seen.has(o.tag)) continue; seen.add(o.tag); o = ctx.lookup(o); }
+    if (!o) continue;
+    if (o instanceof L.PDFDict) for (const [, v] of o.entries()) stack.push(v);
+    else if (o instanceof L.PDFArray) for (const v of o.asArray()) stack.push(v);
+    else if (o.dict instanceof L.PDFDict) stack.push(o.dict);
+  }
+  for (const [ref] of ctx.enumerateIndirectObjects()) if (!seen.has(ref.tag)) ctx.delete(ref);
+}
+
+/* ---------- 刪除原有圖片：畫面 ---------- */
+const peSig = pg => (pg.del && pg.del.length ? [...pg.del].sort().join(',') : '') + (pg.noAnn ? '|na' : '');
+async function peLib(s) {
+  if (!s.lib) s.lib = await PDFLib.PDFDocument.load(s.bytes, { ignoreEncryption: true, updateMetadata: false });
+  return s.lib;
+}
+// 取得要顯示的 pdf.js 頁面：有刪除圖片時，改用刪除後的版本（與匯出結果相同）
+async function peSrcPage(pg) {
+  const s = PE.srcs[pg.src];
+  if (!pg.del || !pg.del.length) return s.doc.getPage(pg.idx + 1);
+  const key = pg.idx + '|' + [...pg.del].sort().join(',');
+  s.der = s.der || new Map();
+  if (!s.der.has(key)) {
+    const p = (async () => {
+      const L = PDFLib, lib = await peLib(s), d = await L.PDFDocument.create();
+      const [pp] = await d.copyPages(lib, [pg.idx]); d.addPage(pp); peStripImages(d, pp, pg.del);
+      const bytes = await d.save({ useObjectStreams: false });
+      return pdfjsLib.getDocument({ data: bytes, CMapReaderFactory: PeCMapFactory, isEvalSupported: false }).promise;
+    })();
+    p.catch(() => s.der.delete(key));
+    s.der.set(key, p);
+  }
+  return (await s.der.get(key)).getPage(1);
+}
+function peRefreshCanvas(pg) {
+  const el = document.querySelector(`.pe-page[data-pid="${pg.id}"]`);
+  if (el) { el.querySelector('canvas').dataset.z = ''; peLazy(el, true); }
+}
+// 進入「刪除原有圖片」前，先分析每一頁有哪些圖片
+async function peObjPrepare() {
+  const list = PE.pages.filter(p => p.src && !(PE.srcs[p.src].objs && PE.srcs[p.src].objs[p.idx]));
+  if (!list.length) return true;
+  try {
+    await peLibs(); let n = 0;
+    for (const pg of list) {
+      peBusy(`分析頁面上的圖片… ${++n} / ${list.length} 頁`);
+      await new Promise(r => setTimeout(r, 0));
+      const s = PE.srcs[pg.src], lib = await peLib(s); s.objs = s.objs || {};
+      if (s.objs[pg.idx]) continue;
+      const p = lib.getPage(pg.idx), box = p.getCropBox();
+      if (lib.isEncrypted) { s.objs[pg.idx] = { list: [], box, enc: true }; continue; }
+      try { s.objs[pg.idx] = { list: peFindImages(lib.context, p.node), box }; }
+      catch (e) { console.warn('分析圖片失敗', e); s.objs[pg.idx] = { list: [], box }; }
+    }
+  } catch (e) { peBusy(); await modal('無法分析', esc(e.message || String(e))); return false; }
+  peBusy();
+  return true;
+}
+// 圖片位置換成畫面座標；太小的、橫跨整頁寬或高的（通常是掃描底圖）不列出來
+function peObjList(pg) {
+  const s = pg.src && PE.srcs[pg.src], o = s && s.objs && s.objs[pg.idx]; if (!o) return [];
+  const { W, H, t } = peDims(pg), M = peMatrix(t, o.box), det = M[0] * M[3] - M[1] * M[2];
+  const inv = (px, py) => { const x = px - M[4], y = py - M[5]; return [(M[3] * x - M[2] * y) / det, H - (-M[1] * x + M[0] * y) / det]; };
+  const del = new Set(pg.del || []);
+  return o.list.filter(q => !del.has(q.k)).map(q => {
+    const a = inv(q.x0, q.y0), b = inv(q.x1, q.y1);
+    return { k: q.k, x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), w: Math.abs(a[0] - b[0]), h: Math.abs(a[1] - b[1]) };
+  }).filter(q => q.w > 3 && q.h > 3 && q.w < W * 0.85 && q.h < H * 0.85); // 橫跨整頁的（掃描底圖、掃描條）不列； 依原本的畫圖順序：最後畫的（看得到、蓋在最上面的）點得到
+}
+function peObjSvg(pg, z) {
+  return peObjList(pg).map(o => `<rect class="pe-obj" data-ok="${o.k}" x="${pf(o.x)}" y="${pf(o.y)}" width="${pf(o.w)}" height="${pf(o.h)}" stroke-width="${pf(1.4 / z)}" stroke-dasharray="${pf(5 / z)} ${pf(3 / z)}"><title>點一下刪除這個圖片</title></rect>`).join('');
+}
+function peObjRestoreAll() {
+  const pages = PE.pages.filter(p => p.del && p.del.length); if (!pages.length) return;
+  pePush(); pages.forEach(p => { delete p.del; peDrawAnns(p); peRefreshCanvas(p); }); peToolbar(); toast('已還原刪除的圖片');
+}
+// 一鍵清除 PDF 原有的註解
+async function peStripAnnots() {
+  peCommitText();
+  let n = 0; const pages = [];
+  try {
+    peBusy('檢查原有註解…'); await peLibs();
+    for (const pg of PE.pages) {
+      if (!pg.src || pg.noAnn) continue;
+      const a = (await peLib(PE.srcs[pg.src])).getPage(pg.idx).node.Annots(), c = a ? a.size() : 0;
+      if (c) { n += c; pages.push(pg); }
+    }
+  } catch (e) { peBusy(); await modal('無法檢查註解', esc(e.message || String(e))); return; }
+  peBusy();
+  if (!n) { toast('沒有需要清除的原有註解'); return; }
+  if (!await confirmBox('清除原有註解', `共 ${pages.length} 頁、${n} 個原有註解（批註、文字方塊、圖章、連結、表單欄位等）。<br>清除後畫面與匯出的 PDF 都不會再有這些註解；在這裡加的標註不受影響。<br>可以按 Ctrl+Z 復原。`, '清除')) return;
+  pePush(); pages.forEach(p => { p.noAnn = true; }); peRender();
+  toast(`已清除 ${n} 個原有註解`);
+}
+
+/* ---------- 插入圖片、印章庫 ---------- */
+function peAddImg(bytes, type, nw, nh, key) {
+  key = key || 'm' + uid();
+  const url = URL.createObjectURL(new Blob([bytes], { type: type === 'jpg' ? 'image/jpeg' : 'image/png' }));
+  PE.imgs[key] = { bytes, type, nw, nh, url };
+  return key;
+}
+const peBlobBytes = async b => new Uint8Array(await b.arrayBuffer());
+const peCanvasPng = c => new Promise(r => c.toBlob(r, 'image/png')).then(peBlobBytes);
+// 去除白底：越接近白色越透明，再裁掉四周的空白
+async function peKnockout(bm) {
+  const sc = Math.min(1, 1600 / Math.max(bm.width, bm.height));
+  const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(bm.width * sc)); c.height = Math.max(1, Math.round(bm.height * sc));
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bm, 0, 0, c.width, c.height);
+  const id = g.getImageData(0, 0, c.width, c.height), d = id.data, W = c.width;
+  let x0 = W, y0 = c.height, x1 = -1, y1 = -1;
+  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+    const m = Math.min(d[i], d[i + 1], d[i + 2]);
+    let a = (232 - m) / 62; a = a <= 0 ? 0 : a >= 1 ? 1 : a;
+    if (a > 0) for (let k = 0; k < 3; k++) d[i + k] = Math.max(0, Math.min(255, Math.round(255 - (255 - d[i + k]) / a))); // 還原墨水顏色
+    a *= d[i + 3] / 255; d[i + 3] = Math.round(a * 255);
+    if (a > 0.1) { const x = p % W, y = (p - x) / W; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  }
+  if (x1 < 0) return null;
+  g.putImageData(id, 0, 0);
+  const m = 2; x0 = Math.max(0, x0 - m); y0 = Math.max(0, y0 - m); x1 = Math.min(W - 1, x1 + m); y1 = Math.min(c.height - 1, y1 + m);
+  const o = document.createElement('canvas'); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
+  o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+  return { canvas: o, nw: o.width, nh: o.height, scale: sc };
+}
+// 選好圖片後的設定視窗：預覽、去白底、寬度、存到印章庫
+async function peImageDialog(file, opt = {}) {
+  let bm;
+  try { bm = await createImageBitmap(file); } catch { await modal('無法讀取圖片', '只支援 PNG、JPG 圖片。'); return null; }
+  const isJpg = /jpe?g/i.test(file.type) || /\.jpe?g$/i.test(file.name), isPng = /png/i.test(file.type) || /\.png$/i.test(file.name);
+  const prev = h('canvas', { class: 'pe-imgprev pe-checker' });
+  const ko = h('input', { type: 'checkbox', checked: opt.knock !== false });
+  const save = h('input', { type: 'checkbox', checked: !!opt.save });
+  const nm = h('input', { type: 'text', value: opt.name || file.name.replace(/\.[^.]+$/, ''), style: 'width:200px' });
+  const wcm = h('input', { type: 'number', min: 0.3, max: 60, step: 0.1 });
+  let cur = null, wTouched = false;
+  wcm.addEventListener('input', () => { wTouched = true; });
+  const redraw = async () => {
+    cur = ko.checked ? await peKnockout(bm) : null;
+    const src = cur ? cur.canvas : bm, sw = src.width, sh = src.height, k = Math.min(1, 420 / sw, 240 / sh);
+    prev.width = Math.max(1, Math.round(sw * k)); prev.height = Math.max(1, Math.round(sh * k));
+    const g = prev.getContext('2d'); g.clearRect(0, 0, prev.width, prev.height); g.drawImage(src, 0, 0, prev.width, prev.height);
+    if (!wTouched) { // 預設大小：以掃描 300 dpi 估算，限制在 1.5～15 公分
+      const px = cur ? cur.nw / cur.scale : bm.width;
+      wcm.value = (Math.round(Math.min(15, Math.max(1.5, px / 300 * 2.54)) * 10) / 10).toFixed(1);
+    }
+  };
+  ko.addEventListener('change', () => { ko.parentNode.classList.toggle('on', ko.checked); redraw(); });
+  save.addEventListener('change', () => save.parentNode.classList.toggle('on', save.checked));
+  const body = h('div', {}, prev,
+    h('label', { class: 'chk' + (ko.checked ? ' on' : '') }, ko, '去除白色背景（適合掃描的印章、簽名；蓋在圖上不會擋到線條）'),
+    h('div', { class: 'pe-imgopt' }, h('b', {}, '寬度'), wcm, h('span', {}, '公分'), h('span', { class: 'muted' }, '（放上去之後還可以拖曳調整）')),
+    opt.lockSave ? h('div', { class: 'pe-imgopt' }, h('b', {}, '印章名稱'), nm)
+      : h('div', { class: 'pe-imgopt' }, h('label', { class: 'chk' + (save.checked ? ' on' : ''), style: 'margin:0' }, save, '同時存到印章庫，名稱'), nm),
+    h('p', { class: 'muted', style: 'margin-bottom:0' }, '印章庫存在系統資料夾的「' + PE_STAMP_DIR + '」，同事也能使用。'));
+  await redraw();
+  if (!await modal(opt.title || '插入圖片', body, [{ label: '取消', value: false }, { label: opt.ok || '放到頁面上', value: true, primary: true }])) return null;
+  if (ko.checked && !cur) { await modal('圖片是空白的', '去除白色背景後沒有剩下任何內容，請取消「去除白色背景」或換一張圖片。'); return null; }
+  let bytes, type, nw, nh;
+  if (cur) { bytes = await peCanvasPng(cur.canvas); type = 'png'; nw = cur.nw; nh = cur.nh; }
+  else {
+    nw = bm.width; nh = bm.height;
+    if (isJpg) { bytes = await peBlobBytes(file); type = 'jpg'; }
+    else if (isPng) { bytes = await peBlobBytes(file); type = 'png'; }
+    else { const c = document.createElement('canvas'); c.width = nw; c.height = nh; c.getContext('2d').drawImage(bm, 0, 0); bytes = await peCanvasPng(c); type = 'png'; }
+  }
+  return { bytes, type, nw, nh, wcm: Math.max(0.3, +wcm.value || 3), save: opt.lockSave || save.checked, name: nm.value.trim() || '印章' };
+}
+function pePickImage() {
+  return new Promise(res => {
+    const inp = h('input', { type: 'file', accept: 'image/png,image/jpeg,.png,.jpg,.jpeg', style: 'display:none', id: 'peImgInput',
+      onchange: () => { const f = inp.files[0]; inp.remove(); res(f || null); } });
+    document.body.append(inp); inp.click();
+  });
+}
+async function peInsertImage(opt = {}) {
+  peCommitText();
+  const f = await pePickImage(); if (!f) return;
+  const r = await peImageDialog(f, opt); if (!r) return;
+  const key = peAddImg(r.bytes, r.type, r.nw, r.nh);
+  if (r.save) { const fn = await peStampSave(r); if (fn) PE.stampKeys[fn] = key; }
+  peStartPlace(key, r.wcm, r.save ? r.name : (opt.lockSave ? r.name : '圖片'), opt.from || 'image');
+}
+function peStartPlace(key, wcm, name, from) {
+  peCommitText();
+  if (PE.mode !== 'edit') { PE.mode = 'edit'; PE.annSel = null; }
+  PE.placing = { key, w: wcm / 2.54 * 72, name, from }; PE.tool = 'place'; PE.annSel = null;
+  if (!$('#peTb')) peRender(); else { document.querySelectorAll('.pe-ov').forEach(peOvClass); PE.pages.forEach(peDrawAnns); peToolbar(); }
+  toast('在頁面上點一下放置（拖曳可指定大小）');
+}
+async function peStampDir(create) {
+  if (!S.root) return null;
+  if (!NATIVE && !await ensurePerm(S.root)) return null;
+  return getSub(S.root, PE_STAMP_DIR, create);
+}
+async function peStampMeta(dir) { try { return JSON.parse(await (await readFile(dir, PE_STAMP_META)).text()) || {}; } catch { return {}; } }
+async function peStampSave(r) {
+  try {
+    const dir = await peStampDir(true);
+    if (!dir) { await modal('無法存到印章庫', '要先開啟系統資料夾，才能使用印章庫。這次的圖片仍然可以放到頁面上。'); return null; }
+    const base = r.name.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || '印章', ext = r.type === 'jpg' ? '.jpg' : '.png';
+    let fn = base + ext, i = 2; while (await fileExists(dir, fn)) fn = `${base}(${i++})${ext}`;
+    await writeFile(dir, fn, new Blob([r.bytes], { type: r.type === 'jpg' ? 'image/jpeg' : 'image/png' }));
+    const m = await peStampMeta(dir); m[fn] = { w: r.wcm };
+    await writeFile(dir, PE_STAMP_META, new Blob([JSON.stringify(m, null, 1)], { type: 'application/json' }));
+    toast(`已存到印章庫：${fn}`);
+    return fn;
+  } catch (e) { await modal('存到印章庫失敗', esc(e.message || String(e))); return null; }
+}
+// 印章庫視窗：點一下就開始蓋
+async function peStampLib() {
+  peCommitText();
+  const dir = await peStampDir(false);
+  const names = dir ? await listFiles(dir, /\.(png|jpe?g)$/i) : [], meta = dir ? await peStampMeta(dir) : {}, urls = [];
+  return new Promise(res => {
+    const ov = h('div', { class: 'overlay' });
+    const close = v => { ov.remove(); urls.forEach(u => URL.revokeObjectURL(u)); res(v); };
+    const grid = h('div', { class: 'pe-stamps' });
+    const empty = h('p', { class: 'muted', style: 'margin:6px 0 0' }, !S.root ? '要先開啟系統資料夾，才能使用印章庫。'
+      : '印章庫還是空的。按「＋ 從圖片新增」加入掃描的印章或簽名圖檔（可以自動去除白底），存好之後同事也能使用。');
+    const refresh = () => { empty.style.display = grid.children.length ? 'none' : ''; grid.style.display = grid.children.length ? '' : 'none'; };
+    for (const fn of names) {
+      const card = h('div', { class: 'pe-stamp', title: '點一下開始蓋這個印章' });
+      const img = h('img', { class: 'pe-checker', alt: fn });
+      readFile(dir, fn).then(f => { const u = URL.createObjectURL(f); urls.push(u); img.src = u; }).catch(() => {});
+      const w = meta[fn] && meta[fn].w;
+      card.append(img, h('div', { class: 'nm' }, fn.replace(/\.(png|jpe?g)$/i, '')), h('div', { class: 'sz' }, w ? `寬 ${w} 公分` : ''),
+        h('button', { class: 'del', title: '從印章庫刪除', onclick: async e => {
+          e.stopPropagation();
+          if (!await confirmBox('刪除印章', `要從印章庫刪除「${esc(fn)}」嗎？同事的印章庫也會一起少掉這個印章。<br>已經蓋在 PDF 上的不受影響。`, '刪除')) return;
+          try { await dir.removeEntry(fn); const m = await peStampMeta(dir); delete m[fn]; await writeFile(dir, PE_STAMP_META, new Blob([JSON.stringify(m, null, 1)], { type: 'application/json' })); card.remove(); refresh(); delete PE.stampKeys[fn]; }
+          catch (er) { await modal('刪除失敗', esc(er.message || String(er))); }
+        } }, '×'));
+      card.addEventListener('click', () => close({ fn }));
+      grid.append(card);
+    }
+    refresh();
+    ov.append(h('div', { class: 'modal pe-modal-wide' }, h('div', { class: 'hd' }, '印章庫'), h('div', { class: 'bd' }, grid, empty),
+      h('div', { class: 'ft' },
+        S.root ? h('button', { class: 'btn', onclick: () => close({ add: true }) }, '＋ 從圖片新增') : null,
+        h('button', { class: 'btn primary', onclick: () => close(null) }, '關閉'))));
+    document.body.append(ov);
+  }).then(async r => {
+    if (!r) return;
+    if (r.add) return peInsertImage({ lockSave: true, save: true, title: '新增印章到印章庫', ok: '存到印章庫並開始蓋', from: 'stamp' });
+    try {
+      let key = PE.stampKeys[r.fn];
+      if (!key || !PE.imgs[key]) {
+        const f = await readFile(dir, r.fn), bm = await createImageBitmap(f);
+        key = peAddImg(await peBlobBytes(f), /\.jpe?g$/i.test(r.fn) ? 'jpg' : 'png', bm.width, bm.height); PE.stampKeys[r.fn] = key;
+      }
+      peStartPlace(key, (meta[r.fn] && meta[r.fn].w) || 3, r.fn.replace(/\.(png|jpe?g)$/i, ''), 'stamp');
+    } catch (e) { await modal('無法讀取印章', esc(e.message || String(e))); }
+  });
+}
+function peImgRotate() {
+  const a = peSelAnn(); if (!a || a.type !== 'img') return;
+  pePush(); const cx = a.x + a.w / 2, cy = a.y + a.h / 2;
+  [a.w, a.h] = [a.h, a.w]; a.x = cx - a.w / 2; a.y = cy - a.h / 2; a.r = ((a.r || 0) + 90) % 360;
+  peDrawAnns(pePage(PE.annSel.pid)); peToolbar();
+}
+async function peDrawImg(out, page, a, H) {
+  const im = PE.imgs[a.key]; if (!im) return;
+  out.__peImgs = out.__peImgs || new Map();
+  let e = out.__peImgs.get(a.key);
+  if (!e) { e = im.type === 'jpg' ? await out.embedJpg(im.bytes) : await out.embedPng(im.bytes); out.__peImgs.set(a.key, e); }
+  const L = PDFLib, r = a.r || 0, iw = r % 180 ? a.h : a.w, ih = r % 180 ? a.w : a.h, rad = -r * Math.PI / 180, c = Math.cos(rad), s = Math.sin(rad);
+  page.pushOperators(L.pushGraphicsState(), L.concatTransformationMatrix(c, s, -s, c, a.x + a.w / 2, H - (a.y + a.h / 2)));
+  page.drawImage(e, { x: -iw / 2, y: -ih / 2, width: iw, height: ih });
+  page.pushOperators(L.popGraphicsState());
+}
 
 /* ---------- 匯出 ---------- */
 function peBusy(msg) {
@@ -2886,19 +3429,19 @@ function peMatrix(t, box) {
   return [1, 0, 0, 1, x0, y0];
 }
 function peTextPath(a, line, i) {
-  const f = PE.fk, s = a.size / f.unitsPerEm, lh = a.size * PE_LH;
-  const base = a.y + PE_PAD + i * lh + (lh - a.size) / 2 + a.size * PE_BASE;
-  let cx = a.x + PE_PAD, d = '';
+  const f = a.bold && PE.fkB ? PE.fkB : PE.fk, s = a.size / f.unitsPerEm, it = a.italic ? PE_ITAL : 0;
+  const base = peBaseY(a, i);
+  let cx = peLineX(a, line), d = '';
   const run = f.layout(line);
   run.glyphs.forEach((g, k) => {
     const pos = run.positions[k], ox = cx + pos.xOffset * s, oy = base - pos.yOffset * s;
-    const X = v => pf(ox + v * s), Y = v => pf(oy - v * s);
+    const P = (x, y) => `${pf(ox + (x + it * y) * s)} ${pf(oy - y * s)}`;
     for (const c of g.path.commands) {
       const r = c.args;
-      if (c.command === 'moveTo') d += `M${X(r[0])} ${Y(r[1])}`;
-      else if (c.command === 'lineTo') d += `L${X(r[0])} ${Y(r[1])}`;
-      else if (c.command === 'quadraticCurveTo') d += `Q${X(r[0])} ${Y(r[1])} ${X(r[2])} ${Y(r[3])}`;
-      else if (c.command === 'bezierCurveTo') d += `C${X(r[0])} ${Y(r[1])} ${X(r[2])} ${Y(r[3])} ${X(r[4])} ${Y(r[5])}`;
+      if (c.command === 'moveTo') d += `M${P(r[0], r[1])}`;
+      else if (c.command === 'lineTo') d += `L${P(r[0], r[1])}`;
+      else if (c.command === 'quadraticCurveTo') d += `Q${P(r[0], r[1])} ${P(r[2], r[3])}`;
+      else if (c.command === 'bezierCurveTo') d += `C${P(r[0], r[1])} ${P(r[2], r[3])} ${P(r[4], r[5])}`;
       else if (c.command === 'closePath') d += 'Z';
     }
     cx += pos.xAdvance * s;
@@ -2908,20 +3451,22 @@ function peTextPath(a, line, i) {
 async function peTextPng(out, a) {
   const k = 4, lines = peTextLines(a), th = peTextH(a), lh = a.size * PE_LH;
   const c = document.createElement('canvas'); c.width = Math.ceil(a.w * k); c.height = Math.ceil(th * k);
-  const ctx = c.getContext('2d'); ctx.fillStyle = a.color; ctx.font = `${a.size * k}px ${PE_FONT_STACK}`; ctx.textBaseline = 'alphabetic';
-  lines.forEach((l, i) => ctx.fillText(l, PE_PAD * k, (PE_PAD + i * lh + (lh - a.size) / 2 + a.size * PE_BASE) * k));
+  const ctx = c.getContext('2d'); ctx.fillStyle = a.color; ctx.font = `${a.bold ? 'bold ' : ''}${a.size * k}px ${PE_FONT_STACK}`; ctx.textBaseline = 'alphabetic';
+  const it = a.italic ? PE_ITAL : 0;
+  lines.forEach((l, i) => { const by = (PE_PAD + i * lh + (lh - a.size) / 2 + a.size * PE_BASE) * k; ctx.setTransform(1, 0, -it, 1, it * by, 0); ctx.fillText(l, (peLineX(a, l) - a.x) * k, by); });
   const blob = await new Promise(r => c.toBlob(r, 'image/png'));
   return out.embedPng(new Uint8Array(await blob.arrayBuffer()));
 }
 async function peDrawOn(out, page, pg, H) {
   const L = PDFLib;
   for (const a of pg.anns) {
+    if (a.type === 'img') { await peDrawImg(out, page, a, H); continue; }
     const dash = peDashArr(a.dash, a.width);
     for (const p of peParts(a)) {
       const o = { x: 0, y: H };
-      if (p.fill) o.color = peHex(a.color);
+      if (p.fill) o.color = peHex(p.color || a.color);
       else {
-        o.borderColor = peHex(a.color); o.borderWidth = a.width;
+        o.borderColor = peHex(p.color || a.color); o.borderWidth = a.width;
         o.borderLineCap = (a.dash === 'dot' || p.cap === 'round') ? L.LineCapStyle.Round : L.LineCapStyle.Butt;
         if (dash && !(a.type === 'hl')) o.borderDashArray = dash;
         if (p.opacity) o.borderOpacity = p.opacity;
@@ -2932,7 +3477,7 @@ async function peDrawOn(out, page, pg, H) {
       const lines = peTextLines(a);
       if (PE.fk) {
         const d = lines.map((l, i) => l ? peTextPath(a, l, i) : '').join('');
-        if (d) page.drawSvgPath(d, { x: 0, y: H, color: peHex(a.color) });
+        if (d) page.drawSvgPath(d, peFakeBold(a) ? { x: 0, y: H, color: peHex(a.color), borderColor: peHex(a.color), borderWidth: a.size * 0.04 } : { x: 0, y: H, color: peHex(a.color) });
       } else {
         const img = await peTextPng(out, a), th = peTextH(a);
         page.drawImage(img, { x: a.x, y: H - a.y - th, width: Math.ceil(a.w * 4) / 4, height: Math.ceil(th * 4) / 4 });
@@ -2969,6 +3514,8 @@ async function peBuildPdf(progress) {
     } else {
       page = out.addPage(copied[pg.src][pg.idx].shift());
       page.setRotation(L.degrees(t));
+      if (pg.del && pg.del.length) peStripImages(out, page, pg.del);
+      if (pg.noAnn) page.node.delete(L.PDFName.of('Annots'));
     }
     if (!pg.anns.length) continue;
     const rotNow = (!pg.src || raster[pg.src]) ? 0 : t;
@@ -2981,14 +3528,18 @@ async function peBuildPdf(progress) {
     page.pushOperators(L.popGraphicsState());
   }
   out.setProducer('審勘文件管理 v' + APP_VERSION); out.setCreator('審勘文件管理');
+  if (PE.pages.some(p => (p.del && p.del.length) || p.noAnn)) { await out.flush(); peGC(out); } // 刪掉的圖片、註解不留在檔案裡
   return out.save();
 }
 async function peRecordZip() {
   const zip = new JSZip(), used = [...new Set(PE.pages.map(p => p.src).filter(Boolean))];
   const srcs = used.map((id, i) => { const s = PE.srcs[id]; zip.file(`src/${i}.pdf`, s.bytes); return { id, name: s.name, color: s.color, file: `src/${i}.pdf` }; });
-  zip.file('edit.json', JSON.stringify({ kind: 'pdfedit', ver: 1, app: APP_VERSION, name: PE.name, savedAt: Date.now(), srcs, pages: PE.pages }, null, 1));
+  const keys = [...new Set(PE.pages.flatMap(p => p.anns.filter(a => a.type === 'img').map(a => a.key)))].filter(k => PE.imgs[k]);
+  const imgs = keys.map((k, i) => { const im = PE.imgs[k], file = `img/${i}.${im.type}`; zip.file(file, im.bytes); return { key: k, file, type: im.type, nw: im.nw, nh: im.nh }; });
+  zip.file('edit.json', JSON.stringify({ kind: 'pdfedit', ver: 2, app: APP_VERSION, name: PE.name, savedAt: Date.now(), srcs, imgs, pages: PE.pages }, null, 1));
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 3 } });
 }
+const peNameInput = () => h('input', { type: 'text', class: 'pe-name', value: PE.name || '合併文件', placeholder: '輸入檔名', spellcheck: 'false' });
 const peFileName = () => (PE.name || '合併文件').trim().replace(/[\\/:*?"<>|]/g, '_').replace(/\.pdf$/i, '') || '合併文件';
 async function pePickOut() {
   const d = await pickDir('pdfOut'); if (!d) return null;
@@ -2998,14 +3549,17 @@ async function pePickOut() {
 async function peExport() {
   peCommitText();
   if (!PE.pages.length) return;
-  const base = peFileName();
-  const keep = h('input', { type: 'checkbox', checked: PE.keepRec });
+  const keep = h('input', { type: 'checkbox', checked: PE.keepRec }), nameIn = peNameInput();
   const body = h('div', {},
-    h('p', { style: 'margin-top:0' }, `會把 ${PE.pages.length} 頁合併成「${base}.pdf」，標註直接印在頁面上。`),
-    h('label', { class: 'chk' + (PE.keepRec ? ' on' : '') }, keep, `同時存一份編輯紀錄（${base}.pdfedit），之後可以打開繼續修改`),
+    h('p', { style: 'margin-top:0' }, `會把 ${PE.pages.length} 頁合併成一個 PDF，標註直接印在頁面上。`),
+    h('label', { class: 'pe-fn' }, h('b', {}, '檔名'), nameIn, h('span', { class: 'muted' }, '.pdf')),
+    h('label', { class: 'chk' + (PE.keepRec ? ' on' : '') }, keep, '同時存一份編輯紀錄（.pdfedit），之後可以打開繼續修改'),
     h('p', { class: 'muted' }, '按「選擇資料夾並匯出」後，選擇要存放的資料夾。'));
   keep.addEventListener('change', () => keep.parentNode.classList.toggle('on', keep.checked));
-  if (!await modal('匯出 PDF', body, [{ label: '取消', value: false }, { label: '選擇資料夾並匯出', value: true, primary: true }])) return;
+  const pr = modal('匯出 PDF', body, [{ label: '取消', value: false }, { label: '選擇資料夾並匯出', value: true, primary: true }]);
+  setTimeout(() => { nameIn.focus(); nameIn.select(); }, 30);
+  if (!await pr) return;
+  PE.name = nameIn.value.trim(); const base = peFileName();
   PE.keepRec = keep.checked;
   const dir = await pePickOut(); if (!dir) return;
   if (await fileExists(dir, base + '.pdf') && !await confirmBox('檔案已存在', `「${esc(dir.name)}」裡已經有「${esc(base)}.pdf」，要覆蓋嗎？`, '覆蓋')) return;
@@ -3025,6 +3579,12 @@ async function peExport() {
 }
 async function peSaveRecordOnly() {
   peCommitText();
+  const nameIn = peNameInput();
+  const pr = modal('存編輯紀錄', h('div', {}, h('label', { class: 'pe-fn' }, h('b', {}, '檔名'), nameIn, h('span', { class: 'muted' }, '.pdfedit')),
+    h('p', { class: 'muted' }, '編輯紀錄會保留合併的頁面與所有標註，之後按「開啟編輯紀錄」就能繼續修改。')), [{ label: '取消', value: false }, { label: '選擇資料夾並存檔', value: true, primary: true }]);
+  setTimeout(() => { nameIn.focus(); nameIn.select(); }, 30);
+  if (!await pr) return;
+  PE.name = nameIn.value.trim();
   const dir = await pePickOut(); if (!dir) return;
   const base = peFileName();
   if (await fileExists(dir, base + '.pdfedit') && !await confirmBox('檔案已存在', `已經有「${esc(base)}.pdfedit」，要覆蓋嗎？`, '覆蓋')) return;
@@ -3041,6 +3601,7 @@ async function peOpenRecord(file) {
     if (m.kind !== 'pdfedit') throw new Error('不是 PDF 編輯紀錄檔');
     peClearAll(); await peLibs(); await peLoadFont();
     for (const s of m.srcs) await peAddSource(await zip.file(s.file).async('uint8array'), s.name, { id: s.id, color: s.color });
+    for (const im of m.imgs || []) { const b = await zip.file(im.file).async('uint8array'); peAddImg(b, im.type, im.nw, im.nh, im.key); }
     PE.pages = m.pages; PE.name = m.name || peSrcName(file.name.replace(/\.pdfedit$/i, '')); PE.dirty = false;
     PE.mode = 'grid';
   } catch (e) { peBusy(); peRender(); await modal('無法開啟', '這個檔案無法開啟：' + esc(e.message)); return; }
