@@ -267,6 +267,119 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   check('同資料夾判斷', r5.same && !r5.diff);
   check('找不到檔案回報正確', r5.nf);
 
+  // 5b. PDF 編輯：合併、拖曳排序、旋轉、標註、匯出、編輯紀錄
+  {
+    const { execFileSync } = require('child_process');
+    const order = () => page.evaluate(() => PE.pages.map(p => p.src ? PE.srcs[p.src].name.replace('.pdf', '') + (p.idx + 1) : 'blank'));
+    await page.click('nav button:has-text("PDF 編輯")');
+    await page.waitForSelector('.pe-empty');
+    check('PDF 編輯：顯示拖放區', await page.isVisible('.pe-empty'));
+    let fc = page.waitForEvent('filechooser'); await page.click('.pe-empty button:has-text("選擇 PDF 檔")');
+    await (await fc).setFiles([path.join(W, 'pdf/A.pdf'), path.join(W, 'pdf/B.pdf')]);
+    await page.waitForFunction(() => document.querySelectorAll('.pe-card').length === 3, null, { timeout: 20000 });
+    await page.waitForFunction(() => document.querySelectorAll('.pe-card .pe-thumb canvas').length === 3, null, { timeout: 20000 });
+    check('PDF 編輯：合併兩個檔共 3 頁且縮圖顯示', (await order()).join() === 'A1,A2,B1', (await order()).join());
+    const bDims = await page.evaluate(() => peDims(PE.pages[2]));
+    check('PDF 編輯：原本有旋轉的頁面方向正確', bDims.W > bDims.H && bDims.t === 90, JSON.stringify(bDims));
+    // 拖曳第 3 張到最前面
+    const cards = await page.$$('.pe-card .pe-thumb');
+    const b3 = await cards[2].boundingBox(), b1 = await cards[0].boundingBox();
+    await page.mouse.move(b3.x + b3.width / 2, b3.y + b3.height / 2); await page.mouse.down();
+    await page.mouse.move(b3.x + b3.width / 2 - 20, b3.y + 40, { steps: 4 });
+    await page.mouse.move(b1.x + 10, b1.y + b1.height / 2, { steps: 8 }); await sleep(100);
+    check('PDF 編輯：拖曳時出現插入位置', await page.isVisible('.pe-ins'));
+    await page.mouse.up(); await sleep(400);
+    check('PDF 編輯：拖曳調整順序', (await order()).join() === 'B1,A1,A2', (await order()).join());
+    // 旋轉、刪除、復原
+    await page.hover('.pe-card >> nth=1'); await page.click('.pe-card >> nth=1 >> button[title="向右轉"]'); await sleep(300);
+    check('PDF 編輯：旋轉頁面', await page.evaluate(() => PE.pages[1].rot) === 90);
+    await page.click('.pe-card >> nth=2'); await page.keyboard.press('Delete'); await sleep(300);
+    check('PDF 編輯：刪除頁面', (await order()).join() === 'B1,A1');
+    await page.keyboard.press('Control+z'); await sleep(400);
+    check('PDF 編輯：復原刪除', (await order()).join() === 'B1,A1,A2');
+    await page.click('.pe-card >> nth=2'); await page.click('button:has-text("在選取頁後插入空白頁")'); await sleep(300);
+    check('PDF 編輯：插入空白頁', (await order()).join() === 'B1,A1,A2,blank');
+    // 標註：在第 3 頁（A2）上畫
+    await page.dblclick('.pe-card >> nth=2'); await page.waitForSelector('.pe-page'); await sleep(300);
+    await page.evaluate(() => { PE.zoom = 0.8; PE.scrollTo = PE.pages[2].id; peRender(); }); await sleep(800);
+    const ov = await page.$('.pe-page >> nth=2 >> .pe-ov');
+    await ov.scrollIntoViewIfNeeded(); await sleep(300);
+    const z = await page.evaluate(() => PE.zoom);
+    const at = async (x, y) => { const b = await ov.boundingBox(); return [b.x + x * z, b.y + y * z]; };
+    const drag = async (tool, x1, y1, x2, y2) => {
+      await page.click(`.pe-tb [data-tool="${tool}"]`);
+      const [a, b] = await at(x1, y1), [c, d] = await at(x2, y2);
+      await page.mouse.move(a, b); await page.mouse.down(); await page.mouse.move((a + c) / 2, (b + d) / 2, { steps: 3 }); await page.mouse.move(c, d, { steps: 3 }); await page.mouse.up(); await sleep(100);
+    };
+    await drag('rect', 60, 100, 260, 180);
+    await drag('cloud', 300, 100, 500, 200);
+    await page.click('.pe-tb [data-tool="ellipse"]'); await page.click('.pe-tb button[title="虛線"]');
+    await drag('ellipse', 60, 250, 200, 330);
+    await drag('arrow', 300, 300, 450, 380);
+    await drag('pen', 80, 450, 200, 520);
+    await drag('hl', 80, 600, 300, 600);
+    const n1 = await page.evaluate(() => PE.pages[2].anns.length);
+    check('PDF 編輯：畫出框線、雲朵線、圓圈、箭頭、手寫、螢光筆', n1 === 6, String(n1));
+    check('PDF 編輯：圓圈為虛線', await page.evaluate(() => PE.pages[2].anns[2].type === 'ellipse' && PE.pages[2].anns[2].dash === 'dash'));
+    await page.click('.pe-tb [data-tool="text"]');
+    const [tx, ty] = await at(300, 470); await page.mouse.click(tx, ty);
+    await page.waitForSelector('.pe-ta'); await page.keyboard.type('消防測試 ABC'); await page.keyboard.press('Escape'); await sleep(200);
+    const txt = await page.evaluate(() => PE.pages[2].anns.find(a => a.type === 'text'));
+    check('PDF 編輯：文字框輸入中文', txt && txt.text === '消防測試 ABC', JSON.stringify(txt && txt.text));
+    check('PDF 編輯：文字顯示在頁面上', (await page.textContent('.pe-page >> nth=2 >> .pe-ov')).includes('消防測試'));
+    // 選取並移動框線
+    await page.click('.pe-tb [data-tool="select"]');
+    const [ma, mb] = await at(60, 140), [mc, md] = await at(90, 160);
+    await page.mouse.move(ma, mb); await page.mouse.down(); await page.mouse.move(mc, md, { steps: 5 }); await page.mouse.up(); await sleep(100);
+    const r0 = await page.evaluate(() => PE.pages[2].anns[0]);
+    check('PDF 編輯：拖曳移動標註', Math.abs(r0.x - 90) < 3 && Math.abs(r0.y - 120) < 3, `${r0.x},${r0.y}`);
+    await page.click('.pe-tb button[title="顏色"] >> nth=1'); await sleep(100);
+    check('PDF 編輯：改選取標註的顏色', await page.evaluate(() => PE.pages[2].anns[0].color) === '#1a5fd0');
+    await page.click('.pe-tb button[title="顏色"] >> nth=0');
+    // 橡皮擦刪手寫，再復原
+    await page.click('.pe-tb [data-tool="eraser"]');
+    const pen = await page.evaluate(() => PE.pages[2].anns.find(a => a.type === 'pen').pts[1]);
+    const [ex, ey] = await at(pen[0], pen[1]); await page.mouse.click(ex, ey); await sleep(150);
+    check('PDF 編輯：橡皮擦刪除', await page.evaluate(() => PE.pages[2].anns.length) === 6);
+    await page.keyboard.press('Control+z'); await sleep(300);
+    check('PDF 編輯：復原橡皮擦', await page.evaluate(() => PE.pages[2].anns.length) === 7);
+    // 在旋轉過的第 2 頁畫一個框
+    const ov2 = await page.$('.pe-page >> nth=1 >> .pe-ov'); await ov2.scrollIntoViewIfNeeded(); await sleep(200);
+    { const b = await ov2.boundingBox(); await page.click('.pe-tb [data-tool="rect"]');
+      await page.mouse.move(b.x + 100 * z, b.y + 100 * z); await page.mouse.down(); await page.mouse.move(b.x + 250 * z, b.y + 200 * z, { steps: 4 }); await page.mouse.up();  }
+    // 匯出
+    pick = path.join(W, 'pdfout');
+    await page.fill('.pe-name', '測試合併');
+    await page.click('#peExport'); await page.click('.modal button:has-text("選擇資料夾並匯出")');
+    await page.waitForSelector('.modal .hd:has-text("匯出完成")', { timeout: 30000 });
+    const outPdf = path.join(W, 'pdfout', '測試合併.pdf');
+    check('PDF 編輯：匯出 PDF 與編輯紀錄', fs.existsSync(outPdf) && fs.existsSync(path.join(W, 'pdfout', '測試合併.pdfedit')));
+    await page.click('.modal button:has-text("關閉")');
+    const T = await page.evaluate(() => { const a = PE.pages[2].anns.find(a => a.type === 'text'); return { ...a, th: peTextH(a) }; });
+    const boxes = [[2, 88, 118, 6, 64], [2, T.x, T.y, T.w, T.th], [1, 98, 98, 4, 104], [2, 400, 700, 100, 80]];
+    const res = JSON.parse(execFileSync('python3', [path.join(__dirname, 'pdf_check.py'), outPdf, JSON.stringify(boxes)]).toString());
+    check('PDF 編輯：匯出頁數與順序', res.pages === 4 && res.text[0].includes('B1') && res.text[1].includes('A1') && res.text[2].includes('A2'), JSON.stringify(res.text));
+    check('PDF 編輯：匯出保留旋轉', res.rot[0] === 90 && res.rot[1] === 90 && res.rot[2] === 0, JSON.stringify(res.rot));
+    check('PDF 編輯：框線印在正確位置', res.boxes[0].red > 50, JSON.stringify(res.boxes[0]));
+    check('PDF 編輯：中文字印在文字框內', res.boxes[1].red > 100, JSON.stringify(res.boxes[1]));
+    check('PDF 編輯：旋轉頁上的框線位置正確', res.boxes[2].red > 50, JSON.stringify(res.boxes[2]));
+    check('PDF 編輯：沒有標註的地方是空白', res.boxes[3].red === 0 && res.boxes[3].dark === 0, JSON.stringify(res.boxes[3]));
+    // 清除後重新開啟編輯紀錄
+    const before = await page.evaluate(() => JSON.stringify(PE.pages.map(p => [p.rot, p.anns.length])));
+    await page.click('button:has-text("清除")'); await sleep(200);
+    if (await page.isVisible('.modal')) await page.click('.modal .btn.primary');
+    await page.waitForSelector('.pe-empty');
+    fc = page.waitForEvent('filechooser'); await page.click('.pe-empty button:has-text("開啟編輯紀錄")');
+    fs.copyFileSync(path.join(W, 'pdfout', '測試合併.pdfedit'), path.join(W, 'pdf', 'reopen.pdfedit')); // 測試工具無法上傳中文檔名
+    await (await fc).setFiles(path.join(W, 'pdf', 'reopen.pdfedit'));
+    await page.waitForFunction(() => document.querySelectorAll('.pe-card .pe-thumb canvas').length === 4, null, { timeout: 20000 });
+    const after = await page.evaluate(() => JSON.stringify(PE.pages.map(p => [p.rot, p.anns.length])));
+    check('PDF 編輯：開啟編輯紀錄還原頁面與標註', before === after && (await order()).join() === 'B1,A1,A2,blank', after);
+    check('PDF 編輯：編輯紀錄保留檔名', (await page.inputValue('.pe-name')) === '測試合併');
+    pick = path.join(W, 'root');
+    await page.click('nav button:has-text("文件產出")'); await sleep(300);
+  }
+
   // 6. 安全：沒有通行碼或網址不對都拒絕
   const noTok = await fetch(`${base}api/info`).then(r => r.status);
   const badHost = await new Promise(res => http.get({ host: '127.0.0.1', port: PORT, path: '/api/ping', headers: { Host: 'evil.example:' + PORT } }, r => res(r.statusCode)));

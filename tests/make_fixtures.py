@@ -3,7 +3,7 @@ import json, os, sys, shutil
 import docx
 W = sys.argv[1]; APP = sys.argv[2]
 shutil.rmtree(W, ignore_errors=True)
-for d in ['root/templates', 'case', 'scan', 'home', 'upd']: os.makedirs(os.path.join(W, d))
+for d in ['root/templates', 'root/字型', 'case', 'scan', 'home', 'upd', 'pdf', 'pdfout']: os.makedirs(os.path.join(W, d))
 names = ['資料檢查表_template.docx', '圖說審查申請書_template.docx', '消防防護計畫檢核表_template.docx', '委託書_template.docx',
          '危險物品切結書_template.docx', '危險物品切結書_工廠版_template.docx', '建築圖切結書_template .docx']
 for n in names:
@@ -29,3 +29,16 @@ nxt = cur.rsplit('.', 1)[0] + '.' + str(int(cur.rsplit('.', 1)[1]) + 1)
 open(os.path.join(W, 'upd/app.html'), 'w', encoding='utf8').write(s.replace(f"APP_VERSION = '{cur}'", f"APP_VERSION = '{nxt}'"))
 json.dump({'app': nxt, 'shell': '1.0', 'notes': '- 測試更新說明'}, open(os.path.join(W, 'upd/latest.json'), 'w'), ensure_ascii=False)
 print(cur, '->', nxt)
+
+# PDF 編輯測試用：A.pdf 兩頁直式、B.pdf 一頁橫式且帶 90 度旋轉（內容都是假的）
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4, landscape
+c = canvas.Canvas(os.path.join(W, 'pdf/A.pdf'), pagesize=A4)
+for t in ['PAGE-A1', 'PAGE-A2']:
+    c.setFont('Helvetica', 40); c.drawString(80, 700, t); c.showPage()
+c.save()
+c = canvas.Canvas(os.path.join(W, 'pdf/B.pdf'), pagesize=landscape(A4))
+c.setPageRotation(90); c.setFont('Helvetica', 40); c.drawString(80, 400, 'PAGE-B1'); c.showPage(); c.save()
+# 中文字型（有系統字型才放；沒有時程式會改用圖片方式匯出文字）
+for f in ['/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc']:
+    if os.path.exists(f): shutil.copy(f, os.path.join(W, 'root/字型', os.path.basename(f))); break

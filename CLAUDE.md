@@ -22,7 +22,7 @@
   - `main.go`：本機服務（127.0.0.1:47321，隨機通行碼 `X-App-Token`）、設定檔、更新邏輯
   - `ui_windows.go`：視窗、選資料夾對話框；`ui_other.go`：Linux 開發測試用（不開視窗）
   - `build.sh`：編譯 `dist/FireReviewDocs.exe`（會把 HTML 複製成 `shell/app.html` 內嵌）
-- `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，83 項）
+- `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，109 項；PDF 編輯的檢查用 `tests/pdf_check.py`，需要 pypdf、pypdfium2、reportlab）
 - `.github/workflows/release.yml`：main 上 CHANGELOG 出現有日期的新版本時，自動編譯並建立 Release
 - `docs/`：給人看的說明；`CHANGELOG.md`：每次發布的更新說明（白話）
 
@@ -46,6 +46,15 @@
 - 條件標記（`applyConds()`，只有傳 `cond: condEval` 才處理）：`{列:13}`、`{列:□變更使用}`，逗號＝AND、`|`＝OR、前面加 `!`＝NOT；條件不符刪段落，表格列內容全空就刪列；`{序}` 依保留順序編號。`analyzeTemplate` 會把條件引用記在 `info.condCl` / `info.condChecks`（供重新產出判斷影響），不當成欄位。
 - 寫入 □ ■ 的 run 會補 `w:rFonts w:hint="eastAsia"`（`ensureEAHint`），避免 Word 用英文字型顯示而變小。
 - 注意：系統設定在共用雲端硬碟，新功能用到的設定（例如 `no: -1`、條件標記模板）要等新版發布後，舊版程式才看得懂。
+
+## ④ PDF 編輯（合併、排序、標註、匯出）
+- 函式庫放在 HTML 最後的 `<script type="text/plain">` 區塊（pdf.js 3.11.174 + worker、pdf-lib 1.17.1、@pdf-lib/fontkit 1.1.1、繁中用的 CMap），第一次進入分頁才由 `peLibs()` 載入；worker 用 Blob 建立並設 `workerPort`（直接開 HTML 檔時才不會退回慢速模式）。程式碼在 `/* PE-JS-START */` 區段，樣式在 `/* PE-CSS-START */`。
+- 狀態在 `PE`：`srcs`（來源檔 bytes、pdf.js 文件、每頁大小與原本旋轉）、`pages`（`{id, src, idx, rot, anns}`，空白頁 `src:null` 並帶 `w,h`）。`peDims()` 算出畫面上的寬高與總旋轉角。
+- 標註座標＝畫面上看到的方向、單位 pt、左上原點。旋轉頁面時 `peRotAnn()` 一起轉換。畫面與匯出共用 `peParts()` 產生的路徑；匯出時用 `peMatrix()` 把畫面座標換回 PDF 座標，並先 `wrapContentStreams` 包住原內容。
+- 文字斷行 `peWrap()` 畫面與匯出共用；有字型（系統資料夾 `字型\` 第一個 .otf/.ttf/.ttc）時用 fontkit 量字寬並把字轉成向量路徑印上去，沒有字型就用 canvas 畫成 4 倍解析度 PNG。
+- 編輯紀錄 `.pdfedit` = zip：`edit.json`（name、srcs、pages）+ `src/N.pdf` 原始檔。
+- 加密的來源檔無法直接複製頁面，匯出時改用 200 dpi 圖片。
+- 測試注意：Playwright 的檔案選擇無法上傳中文檔名，測試時要先複製成英文檔名。
 
 ## 我的案件（案件存檔與修正重新產出）
 - 清單存在系統資料夾 `案件紀錄\<使用者名稱>.json`（每人一份），每筆含 `id`（= 案件資料的 `caseId`）、資料夾名稱與路徑、完整案件資料快照。
