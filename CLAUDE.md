@@ -22,7 +22,7 @@
   - `main.go`：本機服務（127.0.0.1:47321，隨機通行碼 `X-App-Token`）、設定檔、更新邏輯
   - `ui_windows.go`：視窗、選資料夾對話框；`ui_other.go`：Linux 開發測試用（不開視窗）
   - `build.sh`：編譯 `dist/FireReviewDocs.exe`（會把 HTML 複製成 `shell/app.html` 內嵌）
-- `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，130 項；PDF 編輯的檢查用 `tests/pdf_check.py`，需要 pypdf、pypdfium2、reportlab）
+- `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，141 項；PDF 編輯的檢查用 `tests/pdf_check.py`，需要 pypdf、pypdfium2、reportlab）
 - `.github/workflows/release.yml`：main 上 CHANGELOG 出現有日期的新版本時，自動編譯並建立 Release
 - `docs/`：給人看的說明；`CHANGELOG.md`：每次發布的更新說明（白話）
 
@@ -59,6 +59,8 @@
 - 文字框格式：`bold`、`italic`、`underline`、`align`、`fill`（底色，null＝無）、`bcolor`（框線色，沒有時沿用 `color`）。`字型\` 檔名含 Bold／粗 的當粗體字型（`PE.fkB`）；有一般字型但沒粗體字型時用描邊加粗（`peFakeBold`）。斜體＝傾斜 `PE_ITAL`，畫面用 transform、匯出直接算在字形路徑上。
 - 圖片標註 `{type:'img', key, x, y, w, h, r}`：圖片資料放在 `PE.imgs[key]`（不放進復原紀錄），編輯紀錄 ver 2 存在 `img/N.png|jpg`。去白底 `peKnockout()`。印章庫＝系統資料夾 `印章庫\`（PNG/JPG＋`印章庫.json` 記預設寬度公分），同事共用；不可放進 GitHub。
 - 匯出檔名在匯出視窗裡填（`.modal .pe-name`），上方工具列不再有檔名欄。
+- 檔案大小（v2.2）：`peEstimate(pages)` 用 `peWalkSize()` 走過每頁用到的物件加總大小；串流用內容雜湊當識別，所以跨來源檔相同的圖片、字型只算一次（和匯出時的 `peDedupe()` 一致，誤差約 1～5%）。每頁的物件清單快取在 `s.szInfo`（鍵含 `peSig`）。`peSizeSoon()` 在 `peRender`、`pePush`、復原時重算，更新 `#peSize` 與縮圖下的 `.pe-csz`。MB 一律用 1,000,000 bytes，限制 `PE.limitMB`（localStorage `peLimitMB`，預設 8），比 Windows 顯示的 MB 保守。
+- 匯出：`peBuildPdf(progress, { pages, raster: {頁id: dpi}, onCanvas })`，最後一律 `peDedupe()` + `peGC()`。超過限制且勾選自動分割（`PE.autoSplit`）時走 `peSplitPlan()`：先找單頁就超過的頁 → `peOversizeDialog()` 列出解析度（含原解析度，`peNativeDpi()` 取佔頁面面積最多的圖片解析度、用長邊算）試算大小與預覽 → 依頁序貪婪分組（轉成圖片的頁用實際大小）→ 每組實際建檔，超過就把最後一頁移到下一組。分割檔名 `檔名(a-b頁).pdf`。轉成圖片用 `pePlaceRaster()`：灰階頁存灰階，JPEG(0.92) 與無損 Flate 取較小。
 - 測試注意：Playwright 的檔案選擇無法上傳中文檔名，測試時要先複製成英文檔名。e2e 會套用一次「更新」，`/tmp/fire-e2e/home/cache/app.html` 會留下舊程式；自己另外測試時要先刪掉它，否則開的是舊版。
 
 ## 我的案件（案件存檔與修正重新產出）

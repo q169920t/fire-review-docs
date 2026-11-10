@@ -51,6 +51,14 @@ c.linkURL('https://example.com', (80, 390, 200, 420)); c.linkURL('https://exampl
 c.showPage(); c.save()
 im = Image.new('RGB', (300, 300), 'white'); d = ImageDraw.Draw(im); d.ellipse((40, 40, 260, 260), outline=(210, 20, 30), width=24); d.rectangle((120, 120, 180, 180), fill=(210, 20, 30))
 im.save(os.path.join(W, 'pdf/stamp.png'))
+# v2.2 測試用：雜訊圖（無法壓縮）。D.pdf 3 頁各約 0.61 MB；E.pdf 1 頁約 2.45 MB
+def noise_pdf(fn, n, px):
+    c = canvas.Canvas(os.path.join(W, fn), pagesize=A4)
+    for k in range(n):
+        f = os.path.join(W, f'pdf/noise{px}_{k}.png'); Image.frombytes('L', (px, px), os.urandom(px * px)).save(f)
+        c.drawImage(f, 0, 842 - 595, 595, 595); c.setFont('Helvetica', 20); c.drawString(60, 120, f'NOISE-{px}-{k + 1}'); c.showPage()
+    c.save()
+noise_pdf('pdf/D.pdf', 3, 700); noise_pdf('pdf/E.pdf', 1, 1400)
 # 中文字型（有系統字型才放；沒有時程式會改用圖片方式匯出文字）
 for f in ['/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc']:
     if os.path.exists(f): shutil.copy(f, os.path.join(W, 'root/字型', os.path.basename(f))); break

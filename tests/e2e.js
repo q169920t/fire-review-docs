@@ -459,6 +459,53 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check('PDF 編輯：匯出後沒有原有註解、剩 1 張原圖', res2.annots[0] === 0 && res2.imgsizes[0].filter(z => z[0] === 40).length === 1, JSON.stringify([res2.annots, res2.imgsizes]));
     check('PDF 編輯：文字底色與字印出', res2.boxes[3].yellow > 200 && res2.boxes[3].red > 50, JSON.stringify(res2.boxes[3]));
     check('PDF 編輯：印章印在正確位置', res2.boxes[4].red > 100, JSON.stringify(res2.boxes[4]));
+
+    // 5d. v2.2：檔案大小顯示、只匯出選取頁、超過上傳限制自動分割、單頁太大選解析度
+    await page.click('button[title="清除目前的全部內容，重新開始"]'); await sleep(200);
+    if (await page.isVisible('.modal')) await page.click('.modal .btn.primary');
+    await page.waitForSelector('.pe-empty');
+    fc = page.waitForEvent('filechooser'); await page.click('.pe-empty button:has-text("選擇 PDF 檔")');
+    await (await fc).setFiles([path.join(W, 'pdf/D.pdf'), path.join(W, 'pdf/E.pdf')]);
+    await page.waitForFunction(() => PE.pages.length === 4);
+    await page.waitForFunction(() => /約 [\d.]+ MB/.test(document.querySelector('#peSize')?.textContent || ''), null, { timeout: 30000 });
+    const est = parseFloat((await page.textContent('#peSize')).match(/約 ([\d.]+) MB/)[1]);
+    check('PDF 編輯：即時顯示合計大小（約 4.3 MB）', est > 3.9 && est < 4.8, String(est));
+    await page.waitForFunction(() => [...document.querySelectorAll('.pe-csz')].every(e => /MB/.test(e.textContent)), null, { timeout: 30000 });
+    check('PDF 編輯：每頁顯示單獨大小', (await page.textContent('.pe-card >> nth=3 >> .pe-csz')).includes('MB'));
+    await page.click('.pe-card >> nth=0'); await sleep(600);
+    check('PDF 編輯：顯示選取頁面的大小', (await page.textContent('#peSize')).includes('選取 1 頁'), await page.textContent('#peSize'));
+    // 只匯出選取的頁面
+    await page.click('#peExport'); await page.waitForSelector('.modal .pe-scope');
+    await page.fill('.modal .pe-name', 'sel測試'); await page.check('.modal input[value="sel"]');
+    await page.click('.modal button:has-text("選擇資料夾並匯出")');
+    await page.waitForSelector('.modal .hd:has-text("匯出完成")', { timeout: 30000 });
+    check('PDF 編輯：符合限制時顯示 ✓', (await page.textContent('.modal .bd')).includes('符合 8 MB'));
+    await page.click('.modal button:has-text("關閉")');
+    const rs = JSON.parse(execFileSync('python3', [path.join(__dirname, 'pdf_check.py'), path.join(W, 'pdfout', 'sel測試.pdf'), '[]']).toString());
+    check('PDF 編輯：只匯出選取的 1 頁', rs.pages === 1 && rs.text[0].includes('NOISE-700-1'), JSON.stringify(rs.text));
+    // 全部匯出，上傳限制 1.5 MB → 自動分割；第 4 頁單獨就 2.5 MB → 選解析度
+    await page.click('.pe-grid', { position: { x: 5, y: 5 } }); await sleep(200);
+    await page.click('#peExport'); await page.waitForSelector('.modal .pe-lim');
+    await page.fill('.modal .pe-name', 'split測試'); await page.fill('.modal .pe-lim', '1.5');
+    await page.click('.modal button:has-text("選擇資料夾並匯出")');
+    await page.waitForSelector('.modal .hd:has-text("這一頁太大")', { timeout: 60000 });
+    check('PDF 編輯：單頁太大時提供解析度選項', (await page.$$('.modal .pe-dpi')).length >= 2, String((await page.$$('.modal .pe-dpi')).length));
+    await page.waitForSelector('.modal button:has-text("使用選取的解析度"):not([disabled])', { timeout: 90000 });
+    const pickD = await page.evaluate(() => +document.querySelector('.pe-dpi.on')?.dataset.d);
+    check('PDF 編輯：預設選符合限制裡最高的解析度、有預覽', pickD > 0 && !!(await page.$('.modal .pe-dpiprev canvas')), String(pickD));
+    await page.click('.modal button:has-text("使用選取的解析度")');
+    await page.waitForSelector('.modal .hd:has-text("已自動分割")', { timeout: 90000 });
+    await page.click('.modal button:has-text("關閉")');
+    const sp = ['split測試(1-2頁).pdf', 'split測試(3頁).pdf', 'split測試(4頁).pdf'].map(n => path.join(W, 'pdfout', n));
+    check('PDF 編輯：依頁序分割成 3 個檔', sp.every(f => fs.existsSync(f)), fs.readdirSync(path.join(W, 'pdfout')).join(','));
+    if (sp.every(f => fs.existsSync(f))) {
+      const sizes = sp.map(f => fs.statSync(f).size);
+      check('PDF 編輯：每個分割檔都不超過 1.5 MB', sizes.every(z => z <= 1.5e6), JSON.stringify(sizes));
+      const pc = sp.map(f => JSON.parse(execFileSync('python3', [path.join(__dirname, 'pdf_check.py'), f, '[]']).toString()));
+      check('PDF 編輯：分割檔頁數與內容正確', pc[0].pages === 2 && pc[1].pages === 1 && pc[2].pages === 1 && pc[0].text[1].includes('NOISE-700-2') && pc[1].text[0].includes('NOISE-700-3'), JSON.stringify(pc.map(x => x.text)));
+    }
+    await page.evaluate(() => peRender()); await sleep(1500);
+    check('PDF 編輯：超過限制的頁面醒目標示', !!(await page.$('.pe-card >> nth=3 >> .pe-csz.over')) && !!(await page.$('#peSize .pe-szp.over')));
     pick = path.join(W, 'root');
     await page.click('nav button:has-text("文件產出")'); await sleep(300);
   }

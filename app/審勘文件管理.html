@@ -229,6 +229,27 @@ body:has(main.pe-main){overflow:hidden}
 .pe-stamp .del{position:absolute;top:4px;right:4px;border:0;background:rgba(255,255,255,.9);border-radius:50%;width:24px;height:24px;cursor:pointer;color:#888;font-size:15px;line-height:1}
 .pe-stamp .del:hover{color:#d4202c;background:#fde8e8}
 .pe-modal-wide{width:min(760px,94vw)}
+/* v2.2：檔案大小、分割 */
+.pe-size{display:flex;gap:8px;align-items:center;font-size:13px;margin-right:6px}
+.pe-szp{display:inline-flex;gap:6px;align-items:center;padding:5px 11px;border-radius:999px;background:#e8f5ec;color:#1f6b3a;border:1px solid #bfe3cb;white-space:nowrap}
+.pe-szp b{font-weight:700;font-size:14px}
+.pe-szp.over{background:#fde8e8;color:#b3141f;border-color:#f0a8ad;animation:pePulse 1.4s ease-in-out 3}
+.pe-szp i{font-style:normal;font-weight:700;background:#d4202c;color:#fff;border-radius:999px;padding:1px 8px;font-size:12px}
+@keyframes pePulse{50%{box-shadow:0 0 0 5px rgba(212,32,44,.25)}}
+.pe-csz{font-size:11px;color:var(--muted);margin-left:4px;white-space:nowrap}
+.pe-csz.over{color:#fff;background:#d4202c;border-radius:6px;padding:0 5px;font-weight:700}
+.pe-scope{display:flex;flex-direction:column;gap:6px;margin:0 0 12px}
+.pe-scope label{display:flex;gap:6px;align-items:center;cursor:pointer}
+.pe-lim{width:76px}
+.pe-dpis{display:flex;flex-direction:column;gap:6px;margin:8px 0}
+.pe-dpi{display:flex;gap:16px;align-items:center;padding:8px 12px;border:1px solid var(--line);border-radius:8px;cursor:default;opacity:.6}
+.pe-dpi.ready{cursor:pointer;opacity:1}
+.pe-dpi b{min-width:72px}.pe-dpi .sz{min-width:90px}
+.pe-dpi.on{border-color:#3b7cf0;box-shadow:0 0 0 2px #dbe7fd}
+.pe-dpi .ok{color:#1f6b3a;font-weight:600}.pe-dpi.bad .ok{color:#b3141f}
+.pe-dpiprev{margin:8px 0;min-height:24px}.pe-dpiprev canvas{display:block;border:1px solid var(--line);margin-top:6px}
+.pe-files{margin:8px 0;padding:0;list-style:none}.pe-files li{display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.pe-files li .nm{flex:1;word-break:break-all}.pe-files .ok{color:#1f6b3a;font-weight:700}.pe-files .bad{color:#b3141f;font-weight:700}
 /* PE-CSS-END */
 </style>
 </head>
@@ -269,7 +290,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const SETTINGS_FILE = '系統設定.json';
 const CASE_FILE = '案件資料.json';
-const APP_VERSION = '2.1';
+const APP_VERSION = '2.2';
 const TPL_DIR = 'templates';
 const BAD_CHARS = /[\\/:*?"<>|]/;
 const $ = s => document.querySelector(s);
@@ -2070,7 +2091,8 @@ const PE = {
     cloud: { color: '#d4202c', width: 1.5, dash: 'solid' }, line: { color: '#d4202c', width: 2, dash: 'solid' },
     arrow: { color: '#d4202c', width: 2, dash: 'solid' }, pen: { color: '#1a5fd0', width: 2, dash: 'solid' }, hl: { color: '#ffd400', width: 12, dash: 'solid' }
   },
-  font: undefined, fk: null, fkB: null, thumbs: new Map(), io: null, imgs: {}, placing: null, stampKeys: {}
+  font: undefined, fk: null, fkB: null, thumbs: new Map(), io: null, imgs: {}, placing: null, stampKeys: {},
+  limitMB: +ls.get('peLimitMB', 8) || 8, autoSplit: ls.get('peAutoSplit', true) !== false
 };
 
 /* ---------- 函式庫與字型 ---------- */
@@ -2183,7 +2205,7 @@ function peRemoveSource(id) {
   });
 }
 function peClearAll() {
-  for (const s of Object.values(PE.srcs)) { try { s.doc.destroy(); } catch {} if (s.der) for (const d of s.der.values()) d.then(x => x.destroy()).catch(() => {}); }
+  for (const s of Object.values(PE.srcs)) { try { s.doc.destroy(); } catch {} if (s.der) for (const d of s.der.values()) d.then(x => x.pj && x.pj.then(y => y.destroy())).catch(() => {}); }
   for (const im of Object.values(PE.imgs)) try { URL.revokeObjectURL(im.url); } catch {}
   if (PE.tool === 'place' || PE.tool === 'objdel') PE.tool = 'select';
   Object.assign(PE, { srcs: {}, pages: [], sel: new Set(), anchor: null, annSel: null, editing: null, undo: [], redo: [], dirty: false, name: '', mode: 'grid', imgs: {}, placing: null, stampKeys: {}, editY: null, zoom: 0 });
@@ -2191,13 +2213,13 @@ function peClearAll() {
 }
 
 /* ---------- 復原／重做 ---------- */
-function pePush() { PE.undo.push(JSON.stringify(PE.pages)); if (PE.undo.length > 150) PE.undo.shift(); PE.redo = []; PE.dirty = true; }
+function pePush() { PE.undo.push(JSON.stringify(PE.pages)); if (PE.undo.length > 150) PE.undo.shift(); PE.redo = []; PE.dirty = true; peSizeSoon(); }
 function peUndo(redo) {
   peCommitText();
   const from = redo ? PE.redo : PE.undo, to = redo ? PE.undo : PE.redo;
   if (!from.length) return;
   const sig0 = Object.fromEntries(PE.pages.map(p => [p.id, peSig(p)]));
-  to.push(JSON.stringify(PE.pages)); PE.pages = JSON.parse(from.pop());
+  to.push(JSON.stringify(PE.pages)); PE.pages = JSON.parse(from.pop()); peSizeSoon();
   PE.annSel = null; PE.dirty = true;
   const ids = new Set(PE.pages.map(p => p.id)); PE.sel = new Set([...PE.sel].filter(i => ids.has(i)));
   if (PE.mode === 'edit' && $('#pePages') && $('#pePages').children.length === PE.pages.length && PE.pages.every((p, i) => $('#pePages').children[i].dataset.pid === p.id && $('#pePages').children[i].dataset.rot == p.rot)) {
@@ -2401,6 +2423,7 @@ function peRender() {
     h('button', { class: 'btn', onclick: () => pePickFiles('.pdfedit', false) }, '開啟編輯紀錄'),
     has ? h('button', { class: 'btn', id: 'peStripAnn', title: '把 PDF 原本就有的註解、批註、連結、表單欄位全部清除', onclick: () => peStripAnnots() }, '清除原有註解') : null,
     h('span', { class: 'pe-sp' }),
+    has ? h('span', { class: 'pe-size', id: 'peSize' }) : null,
     has ? h('button', { class: 'btn', title: '把目前的合併與標註存成編輯紀錄檔，之後可以再打開繼續修改', onclick: () => peSaveRecordOnly() }, '存編輯紀錄') : null,
     has ? h('button', { class: 'btn primary', id: 'peExport', onclick: () => peExport() }, '匯出 PDF') : null,
     has ? h('button', { class: 'btn small', title: '清除目前的全部內容，重新開始', onclick: async () => { if (!PE.dirty || await confirmBox('全部清除', '目前的合併與標註會全部清除（已匯出的檔案不受影響）。確定嗎？', '清除')) { peClearAll(); peRender(); } } }, '清除') : null].filter(Boolean));
@@ -2415,6 +2438,7 @@ function peRender() {
   if (PE.io) { PE.io.disconnect(); PE.io = null; }
   if (!has) { body.append(peEmpty()); return; }
   if (PE.mode === 'edit') peEditView(body); else peGridView(body);
+  peSizeSoon();
 }
 function peEmpty() {
   const box = h('div', { class: 'pe-empty' },
@@ -2512,7 +2536,8 @@ function peGridView(body) {
         h('button', { class: 'del', title: '刪除這一頁', onclick: e => { e.stopPropagation(); peDeletePages([pg.id]); } }, peIcon('trash'))),
       h('div', { class: 'pe-cap', title: s ? `${s.name} 第 ${pg.idx + 1} 頁` : '空白頁' },
         h('b', {}, String(i + 1)), h('span', { style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:' + (PE.thumb - 40) + 'px' }, s ? `${peSrcName(s.name)}・${pg.idx + 1}` : '空白頁'),
-        pg.anns.length ? h('span', { class: 'an', title: `有 ${pg.anns.length} 個標註` }, '✎' + pg.anns.length) : null));
+        pg.anns.length ? h('span', { class: 'an', title: `有 ${pg.anns.length} 個標註` }, '✎' + pg.anns.length) : null,
+        h('span', { class: 'pe-csz', 'data-szid': pg.id })));
     card.addEventListener('pointerdown', e => peCardDown(e, pg, card));
     card.addEventListener('dblclick', e => { if (!e.target.closest('.pe-tools')) peOpenEditor(pg.id); });
     card.querySelectorAll('.pe-tools button').forEach(b => b.addEventListener('pointerdown', e => e.stopPropagation()));
@@ -3156,24 +3181,270 @@ async function peLib(s) {
   if (!s.lib) s.lib = await PDFLib.PDFDocument.load(s.bytes, { ignoreEncryption: true, updateMetadata: false });
   return s.lib;
 }
-// 取得要顯示的 pdf.js 頁面：有刪除圖片時，改用刪除後的版本（與匯出結果相同）
-async function peSrcPage(pg) {
-  const s = PE.srcs[pg.src];
-  if (!pg.del || !pg.del.length) return s.doc.getPage(pg.idx + 1);
-  const key = pg.idx + '|' + [...pg.del].sort().join(',');
+/* ---------- 檔案大小：預估、無損壓縮（合併重複的內容） ---------- */
+const peHash = b => { let h = 0x811c9dc5; for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
+const peHashMemo = new WeakMap();
+function peStreamKey(o) { let k = peHashMemo.get(o); if (!k) { k = 'h' + o.contents.length + ':' + peHash(o.contents); peHashMemo.set(o, k); } return k; }
+// 一頁用到的所有物件（圖片、字型、內容）與大小；相同內容的串流用內容當識別，所以跨檔重複的只算一次
+function peWalkSize(ctx, node, tag, skipAnnots, acc) {
+  const L = PDFLib, seen = new Set([node === null ? '' : tag]), stack = [];
+  for (const [k, v] of node.entries()) { const ks = k.asString(); if (ks === '/Parent' || (skipAnnots && ks === '/Annots')) continue; stack.push(v); }
+  acc.set(tag, 80);
+  while (stack.length) {
+    const v = stack.pop();
+    if (v instanceof L.PDFRef) {
+      if (seen.has(v.tag)) continue; seen.add(v.tag);
+      const o = ctx.lookup(v); if (!o) continue;
+      if (o instanceof L.PDFRawStream) { acc.set(peStreamKey(o), o.contents.length + 40 + o.dict.entries().length * 14); stack.push(o.dict); continue; }
+      if (o instanceof L.PDFDict) {
+        const ty = o.get(L.PDFName.of('Type'));
+        if (ty && (ty.asString() === '/Page' || ty.asString() === '/Pages')) continue; // 連結指到別頁的不算
+        acc.set(v.tag, 20 + o.entries().length * 14);
+      } else acc.set(v.tag, 30);
+      stack.push(o); continue;
+    }
+    if (v instanceof L.PDFDict) { for (const [k, x] of v.entries()) { const ks = k.asString(); if (ks !== '/Parent' && ks !== '/P') stack.push(x); } }
+    else if (v instanceof L.PDFArray) for (const x of v.asArray()) stack.push(x);
+    else if (v && v.dict instanceof L.PDFDict) stack.push(v.dict);
+  }
+  return acc;
+}
+const peBytesEq = (a, b) => { if (a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true; };
+// 合併內容完全相同的串流（例如每張圖都有的同一個標章、字型），畫質完全不變
+function peDedupe(doc) {
+  const L = PDFLib, ctx = doc.context; let total = 0;
+  for (let pass = 0; pass < 4; pass++) {
+    const byKey = new Map(), remap = new Map();
+    for (const [ref, o] of ctx.enumerateIndirectObjects()) {
+      if (!(o instanceof L.PDFRawStream) || o.contents.length < 64) continue;
+      const dk = o.dict.entries().filter(([k]) => k.asString() !== '/Length').map(([k, v]) => k.asString() + '=' + v.toString()).sort().join('|');
+      const k = peStreamKey(o) + '#' + peHash(new TextEncoder().encode(dk));
+      const list = byKey.get(k);
+      if (!list) { byKey.set(k, [[ref, o, dk]]); continue; }
+      const same = list.find(([, x, d]) => d === dk && peBytesEq(x.contents, o.contents));
+      if (same) remap.set(ref.tag, same[0]); else list.push([ref, o, dk]);
+    }
+    if (!remap.size) break;
+    total += remap.size;
+    const fix = c => {
+      if (c instanceof L.PDFDict) { for (const [k, v] of c.entries()) { if (v instanceof L.PDFRef) { const n = remap.get(v.tag); if (n) c.set(k, n); } else fix(v); } }
+      else if (c instanceof L.PDFArray) { for (let i = 0; i < c.size(); i++) { const v = c.get(i); if (v instanceof L.PDFRef) { const n = remap.get(v.tag); if (n) c.set(i, n); } else fix(v); } }
+      else if (c && c.dict instanceof L.PDFDict) fix(c.dict);
+    };
+    for (const [, o] of ctx.enumerateIndirectObjects()) fix(o);
+    fix(ctx.trailerInfo.Root && ctx.lookup(ctx.trailerInfo.Root));
+  }
+  return total;
+}
+
+// 刪除圖片後的單頁（pdf-lib 文件）；畫面顯示與大小估算共用
+function peDerived(pg) {
+  const s = PE.srcs[pg.src], key = pg.idx + '|' + [...pg.del].sort().join(',');
   s.der = s.der || new Map();
   if (!s.der.has(key)) {
     const p = (async () => {
       const L = PDFLib, lib = await peLib(s), d = await L.PDFDocument.create();
       const [pp] = await d.copyPages(lib, [pg.idx]); d.addPage(pp); peStripImages(d, pp, pg.del);
-      const bytes = await d.save({ useObjectStreams: false });
-      return pdfjsLib.getDocument({ data: bytes, CMapReaderFactory: PeCMapFactory, isEvalSupported: false }).promise;
+      return { d, pp, pj: null };
     })();
     p.catch(() => s.der.delete(key));
     s.der.set(key, p);
   }
-  return (await s.der.get(key)).getPage(1);
+  return s.der.get(key);
 }
+// 取得要顯示的 pdf.js 頁面：有刪除圖片時，改用刪除後的版本（與匯出結果相同）
+async function peSrcPage(pg) {
+  const s = PE.srcs[pg.src];
+  if (!pg.del || !pg.del.length) return s.doc.getPage(pg.idx + 1);
+  const r = await peDerived(pg);
+  if (!r.pj) r.pj = (async () => pdfjsLib.getDocument({ data: await r.d.save({ useObjectStreams: false }), CMapReaderFactory: PeCMapFactory, isEvalSupported: false }).promise)();
+  return (await r.pj).getPage(1);
+}
+
+/* ---------- 檔案大小：即時顯示 ---------- */
+const PE_MB = 1e6;
+const peMB = b => (b >= 10 * PE_MB ? (b / PE_MB).toFixed(1) : b >= PE_MB ? (b / PE_MB).toFixed(2) : (b / PE_MB).toFixed(2)) + ' MB';
+const peLimit = () => Math.max(0.1, +PE.limitMB || 8) * PE_MB;
+// 一頁用到的物件清單（快取）
+async function pePageInfo(pg) {
+  const s = PE.srcs[pg.src], key = pg.idx + '|' + peSig(pg);
+  s.szInfo = s.szInfo || new Map();
+  if (!s.szInfo.has(key)) {
+    const p = (async () => {
+      const lib = await peLib(s);
+      if (lib.isEncrypted) { const { W, H } = peDims(pg); return { raster: Math.round(W * H * (200 / 72) ** 2 * 0.3) }; }
+      let ctx = lib.context, node = lib.getPage(pg.idx).node, tag = 's' + s.id + ':' + pg.idx, pre = s.id + ':';
+      if (pg.del && pg.del.length) { const r = await peDerived(pg); ctx = r.d.context; node = r.pp.node; pre = s.id + ':d' + key + ':'; }
+      const raw = peWalkSize(ctx, node, tag, !!pg.noAnn, new Map()), map = new Map();
+      for (const [k, v] of raw) map.set(k[0] === 'h' ? k : pre + k, v); // 相同內容只算一次；其他物件依來源檔區分
+      return { map };
+    })();
+    p.catch(() => s.szInfo.delete(key));
+    s.szInfo.set(key, p);
+  }
+  return s.szInfo.get(key);
+}
+// 估算這些頁面匯出後的大小（相同的圖片、字型只算一次，和匯出時的無損壓縮一致）
+async function peEstimate(pages, fixed) {
+  const acc = new Map(); let extra = 1500;
+  for (const pg of pages) {
+    extra += 150;
+    if (fixed && fixed.has(pg.id)) { extra += fixed.get(pg.id); continue; }
+    if (pg.src) { const info = await pePageInfo(pg); if (info.raster) extra += info.raster; else for (const [k, v] of info.map) acc.set(k, v); }
+    for (const a of pg.anns) {
+      extra += 300;
+      if (a.type === 'text') extra += PE.fk ? (a.text || '').length * 380 : Math.round(a.w * peTextH(a) * 16 * 0.4);
+      if (a.type === 'img' && PE.imgs[a.key]) acc.set('i' + a.key, PE.imgs[a.key].bytes.length + 300);
+    }
+  }
+  let t = extra; for (const v of acc.values()) t += v;
+  return t;
+}
+let peSizeTimer = null, peSizeRun = 0;
+function peSizeSoon() { clearTimeout(peSizeTimer); peSizeTimer = setTimeout(peSizeUpdate, 250); }
+async function peSizeUpdate() {
+  const el = $('#peSize'); if (!el || !PE.pages.length) return;
+  const run = ++peSizeRun;
+  if (!el.dataset.ok) el.textContent = '計算檔案大小中…';
+  try {
+    await peLibs();
+    const all = await peEstimate(PE.pages); if (run !== peSizeRun) return;
+    const sel = PE.pages.filter(p => PE.sel.has(p.id)), lim = peLimit();
+    const sz = sel.length && sel.length < PE.pages.length ? await peEstimate(sel) : null; if (run !== peSizeRun) return;
+    el.dataset.ok = '1'; el.innerHTML = '';
+    const part = (label, b) => h('span', { class: 'pe-szp' + (b > lim ? ' over' : '') }, label, h('b', {}, '約 ' + peMB(b)), b > lim ? h('i', {}, `超過 ${PE.limitMB} MB`) : null);
+    el.append(part(`全部 ${PE.pages.length} 頁`, all));
+    if (sz != null) el.append(part(`選取 ${sel.length} 頁`, sz));
+    el.title = `上傳限制 ${PE.limitMB} MB（可在匯出時修改）。大小是預估值，匯出時會先做不傷畫質的壓縮；超過限制會自動分割成多個檔案。`;
+    for (const pg of PE.pages) { // 每一頁單獨的大小
+      const c = document.querySelector(`.pe-csz[data-szid="${pg.id}"]`); if (!c) continue;
+      const b = await peEstimate([pg]); if (run !== peSizeRun) return;
+      c.textContent = peMB(b); c.classList.toggle('over', b > lim);
+      c.title = b > lim ? `這一頁單獨就超過 ${PE.limitMB} MB，匯出時可以選擇解析度縮小` : '這一頁單獨匯出的大約大小';
+    }
+  } catch (e) { console.warn('估算大小失敗', e); if (run === peSizeRun) el.textContent = ''; }
+}
+
+/* ---------- 轉成圖片（縮小過大的頁面） ---------- */
+// 頁面上圖片的原始解析度（取最高的那張大圖）；沒有大圖（向量圖）回傳 0
+async function peNativeDpi(pg) {
+  if (!pg.src) return 0;
+  const s = PE.srcs[pg.src], lib = await peLib(s); if (lib.isEncrypted) return 200;
+  const p = lib.getPage(pg.idx), del = new Set(pg.del || []), list = [];
+  for (const o of peFindImages(lib.context, p.node)) {
+    if (del.has(o.k) || !o.iw) continue;
+    const w = o.x1 - o.x0, hh = o.y1 - o.y0; if (w <= 0 || hh <= 0) continue;
+    list.push([Math.max(o.iw, o.ih) / (Math.max(w, hh) / 72), w * hh]); // 用長邊算，掃描切成細條時短邊不準
+  }
+  if (!list.length) return 0;
+  // 取「佔頁面面積最多」的解析度（面積加權中位數），避免被小張的高解析簽章影響
+  list.sort((a, b) => a[0] - b[0]);
+  const tot = list.reduce((s, x) => s + x[1], 0); let acc = 0;
+  for (const [d, a] of list) { acc += a; if (acc >= tot / 2) return Math.round(d); }
+  return Math.round(list[list.length - 1][0]);
+}
+// 把頁面畫成指定解析度的圖片放進 PDF：灰階頁存灰階；JPEG（高畫質）與無損壓縮取較小的
+async function pePlaceRaster(out, page, pg, dpi, W, H, onCanvas) {
+  const L = PDFLib, c = await peRenderTo(document.createElement('canvas'), pg, dpi / 72);
+  if (onCanvas) onCanvas(c);
+  const g = c.getContext('2d', { willReadFrequently: true }), d = g.getImageData(0, 0, c.width, c.height).data, n = c.width * c.height;
+  let gray = true;
+  for (let i = 0; i < d.length; i += 4 * 7) if (Math.abs(d[i] - d[i + 1]) > 6 || Math.abs(d[i + 1] - d[i + 2]) > 6) { gray = false; break; }
+  const raw = new Uint8Array(gray ? n : n * 3);
+  if (gray) for (let i = 0, j = 0; j < n; i += 4, j++) raw[j] = d[i + 1];
+  else for (let i = 0, j = 0; i < d.length; i += 4, j += 3) { raw[j] = d[i]; raw[j + 1] = d[i + 1]; raw[j + 2] = d[i + 2]; }
+  const fl = out.context.flateStream(raw, { Type: 'XObject', Subtype: 'Image', Width: c.width, Height: c.height, ColorSpace: gray ? 'DeviceGray' : 'DeviceRGB', BitsPerComponent: 8 });
+  const jb = await peBlobBytes(await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92)));
+  if (jb.length < fl.contents.length) { const jpg = await out.embedJpg(jb); page.drawImage(jpg, { x: 0, y: 0, width: W, height: H }); }
+  else {
+    const name = page.node.newXObject('Rs', out.context.register(fl));
+    page.pushOperators(L.pushGraphicsState(), L.concatTransformationMatrix(W, 0, 0, H, 0, 0), L.drawObject(name), L.popGraphicsState());
+  }
+  c.width = c.height = 1;
+}
+
+/* ---------- 超過上傳限制：分割、選解析度 ---------- */
+// 單一頁太大時：列出幾種解析度與匯出後的大小，讓使用者選
+async function peOversizeDialog(pg, num, solo, lim) {
+  const native = await peNativeDpi(pg);
+  // 原解析度也列入：把切成細條的掃描圖重新存成一整張，常常就能變小而且完全不變模糊
+  let opts = [300, 250, 200, 150, 120, 100, 75].filter(d => !native || d <= native * 1.03);
+  if (native && native <= 300 && !opts.some(d => Math.abs(d - native) <= native * 0.03)) opts.unshift(native);
+  const { W, H } = peDims(pg);
+  opts = opts.filter(d => W * H * (d / 72) ** 2 <= 1.2e8).slice(0, 5);
+  if (!opts.length) opts = [Math.max(50, Math.round(native * 0.7))];
+  const res = {}, rows = h('div', { class: 'pe-dpis' }), prevBox = h('div', { class: 'pe-dpiprev muted' }, '選一個解析度可以看清晰度預覽');
+  let pick = null;
+  const show = d => {
+    pick = d; rows.querySelectorAll('.pe-dpi').forEach(r => r.classList.toggle('on', +r.dataset.d === d));
+    const r = res[d]; prevBox.innerHTML = '';
+    if (r && r.crop) prevBox.append(h('div', {}, `${d} dpi 實際大小的局部（圖中央）：`), r.crop);
+  };
+  for (const d of opts) {
+    const row = h('div', { class: 'pe-dpi', 'data-d': d, onclick: () => { if (res[d]) show(d); } },
+      h('b', {}, `${d} dpi`), h('span', { class: 'sz' }, '試算中…'), h('span', { class: 'ok' }),
+      native && Math.abs(d - native) <= native * 0.03 ? h('span', { class: 'muted' }, '原解析度，不會變模糊') : null);
+    rows.append(row);
+  }
+  const body = h('div', {},
+    h('p', { style: 'margin-top:0' }, `第 ${num} 頁單獨就有 ${peMB(solo)}，超過上傳限制 ${PE.limitMB} MB，沒辦法靠分割解決。`),
+    h('p', {}, native ? `這一頁的掃描圖原本約 ${native} dpi。可以把這一頁重新存成一整張圖片來縮小（其他頁不受影響）：` : '這一頁可以轉成圖片來縮小（其他頁不受影響）：'),
+    rows, prevBox,
+    h('p', { class: 'muted', style: 'margin-bottom:0' }, '解析度越低檔案越小，但越模糊；會先幫你選符合限制裡最高的那個。在這頁畫的標註仍然是清楚的向量。'));
+  const pr = modal('這一頁太大', body, [{ label: '取消匯出', value: false }, { label: '這頁維持原樣（會超過限制）', value: 'keep' }, { label: '使用選取的解析度', value: 'use', primary: true }]);
+  const useBtn = () => [...document.querySelectorAll('.modal .ft .btn')].find(b => b.textContent === '使用選取的解析度');
+  if (useBtn()) useBtn().disabled = true;
+  (async () => {
+    for (const d of opts) {
+      if (!document.body.contains(rows)) return;
+      let crop = null;
+      try {
+        const b = await peBuildPdf(null, { pages: [pg], raster: { [pg.id]: d }, onCanvas: c => {
+          const k = d / 72, cw = Math.min(c.width, Math.round(3 * d)), ch = Math.min(c.height, Math.round(2 * d)); // 3×2 英寸
+          const x = h('canvas', { class: 'pe-checker' }); x.width = cw; x.height = ch;
+          x.getContext('2d').drawImage(c, (c.width - cw) / 2, (c.height - ch) / 2, cw, ch, 0, 0, cw, ch);
+          x.style.width = '432px'; x.style.height = Math.round(432 * ch / cw) + 'px'; crop = x; void k;
+        } });
+        res[d] = { size: b.length, crop };
+        const row = rows.querySelector(`[data-d="${d}"]`);
+        row.querySelector('.sz').textContent = peMB(b.length);
+        row.querySelector('.ok').textContent = b.length <= lim ? '✓ 符合' : '✗ 仍超過';
+        row.classList.toggle('bad', b.length > lim); row.classList.add('ready');
+        if (pick == null && b.length <= lim) { show(d); if (useBtn()) useBtn().disabled = false; }
+      } catch (e) { console.warn(e); const row = rows.querySelector(`[data-d="${d}"]`); if (row) row.querySelector('.sz').textContent = '無法試算'; }
+    }
+    if (pick == null) { const ok = opts.filter(d => res[d]); if (ok.length) { show(ok[ok.length - 1]); if (useBtn()) useBtn().disabled = false; } }
+  })();
+  const r = await pr;
+  if (r === 'use' && pick != null) return { dpi: pick, size: res[pick].size };
+  return r === 'keep' ? { keep: true } : null;
+}
+// 依頁序把頁面分成每個都不超過限制的幾組；回傳 [{ pages, a, b, raster }] 或 null（取消）
+async function peSplitPlan(pages, lim, prog) {
+  const raster = {}, solo = new Map(), keep = new Set();
+  for (let i = 0; i < pages.length; i++) {
+    const pg = pages[i]; prog && prog(`檢查每一頁的大小… ${i + 1} / ${pages.length}`);
+    const est = await peEstimate([pg]); solo.set(pg.id, est);
+    if (est <= lim * 0.9) continue;
+    const real = (await peBuildPdf(null, { pages: [pg] })).length; solo.set(pg.id, real);
+    if (real <= lim) continue;
+    peBusy();
+    const r = await peOversizeDialog(pg, i + 1, real, lim);
+    if (!r) return null;
+    if (r.keep) keep.add(pg.id); else { raster[pg.id] = r.dpi; solo.set(pg.id, r.size); }
+  }
+  const groups = []; let cur = [];
+  const close = () => { if (cur.length) groups.push(cur); cur = []; };
+  const fixed = new Map(Object.keys(raster).map(id => [id, solo.get(id)])); // 轉成圖片的頁用實際大小
+  for (const pg of pages) {
+    if (keep.has(pg.id) || (!raster[pg.id] && solo.get(pg.id) > lim * 0.9)) { close(); cur = [pg]; close(); continue; }
+    if (cur.length && await peEstimate([...cur, pg], fixed) > lim * 0.97) close();
+    cur.push(pg);
+  }
+  close();
+  return groups.map(g => ({ pages: g, raster, keep: g.length === 1 && keep.has(g[0].id) }));
+}
+
 function peRefreshCanvas(pg) {
   const el = document.querySelector(`.pe-page[data-pid="${pg.id}"]`);
   if (el) { el.querySelector('canvas').dataset.z = ''; peLazy(el, true); }
@@ -3485,12 +3756,12 @@ async function peDrawOn(out, page, pg, H) {
     }
   }
 }
-async function peBuildPdf(progress) {
+async function peBuildPdf(progress, opt = {}) {
   await peLibs(); await peLoadFont();
-  const L = PDFLib, out = await L.PDFDocument.create();
+  const L = PDFLib, out = await L.PDFDocument.create(), list = opt.pages || PE.pages, rs = opt.raster || {};
   // 先依來源檔一次複製所需頁面，避免重複的字型、圖片讓檔案變大
   const need = {};
-  for (const pg of PE.pages) if (pg.src) (need[pg.src] = need[pg.src] || []).push(pg.idx);
+  for (const pg of list) if (pg.src && !rs[pg.id]) (need[pg.src] = need[pg.src] || []).push(pg.idx);
   const copied = {}, raster = {};
   for (const sid of Object.keys(need)) {
     const s = PE.srcs[sid];
@@ -3502,15 +3773,14 @@ async function peBuildPdf(progress) {
     } catch { raster[sid] = true; }
   }
   let n = 0;
-  for (const pg of PE.pages) {
-    progress && progress(++n, PE.pages.length);
+  for (const pg of list) {
+    progress && progress(++n, list.length);
     const { W, H, t } = peDims(pg);
+    const isR = !!(pg.src && (raster[pg.src] || rs[pg.id]));
     let page;
     if (!pg.src) { page = out.addPage([pg.w, pg.h]); }
-    else if (raster[pg.src]) { // 加密的檔案：改用高解析圖片
-      const c = await peRenderTo(document.createElement('canvas'), { ...pg, rot: pg.rot }, 200 / 72);
-      const jpg = await out.embedJpg(new Uint8Array(await (await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9))).arrayBuffer()));
-      page = out.addPage([W, H]); page.drawImage(jpg, { x: 0, y: 0, width: W, height: H });
+    else if (isR) { // 加密的檔案用 200 dpi；太大的頁面用使用者選的解析度
+      page = out.addPage([W, H]); await pePlaceRaster(out, page, pg, rs[pg.id] || 200, W, H, opt.onCanvas);
     } else {
       page = out.addPage(copied[pg.src][pg.idx].shift());
       page.setRotation(L.degrees(t));
@@ -3518,8 +3788,8 @@ async function peBuildPdf(progress) {
       if (pg.noAnn) page.node.delete(L.PDFName.of('Annots'));
     }
     if (!pg.anns.length) continue;
-    const rotNow = (!pg.src || raster[pg.src]) ? 0 : t;
-    const box = (!pg.src || raster[pg.src]) ? { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() } : page.getCropBox();
+    const rotNow = (!pg.src || isR) ? 0 : t;
+    const box = (!pg.src || isR) ? { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() } : page.getCropBox();
     // 把原本的頁面內容包起來，避免原內容殘留的座標設定影響標註位置
     page.node.normalize();
     page.node.wrapContentStreams(out.context.register(page.createContentStream(L.pushGraphicsState())), out.context.register(page.createContentStream(L.popGraphicsState())));
@@ -3528,7 +3798,8 @@ async function peBuildPdf(progress) {
     page.pushOperators(L.popGraphicsState());
   }
   out.setProducer('審勘文件管理 v' + APP_VERSION); out.setCreator('審勘文件管理');
-  if (PE.pages.some(p => (p.del && p.del.length) || p.noAnn)) { await out.flush(); peGC(out); } // 刪掉的圖片、註解不留在檔案裡
+  // 不傷畫質的壓縮：內容完全相同的圖片、字型只存一份；刪掉的圖片、註解不留在檔案裡
+  await out.flush(); peDedupe(out); peGC(out);
   return out.save();
 }
 async function peRecordZip() {
@@ -3549,32 +3820,82 @@ async function pePickOut() {
 async function peExport() {
   peCommitText();
   if (!PE.pages.length) return;
+  const sel = PE.pages.filter(p => PE.sel.has(p.id)), canSel = sel.length > 0 && sel.length < PE.pages.length;
   const keep = h('input', { type: 'checkbox', checked: PE.keepRec }), nameIn = peNameInput();
+  const lim = h('input', { type: 'number', class: 'pe-lim', min: 0.1, max: 2000, step: 0.5, value: PE.limitMB });
+  const split = h('input', { type: 'checkbox', checked: PE.autoSplit });
+  const scAll = h('input', { type: 'radio', name: 'peScope', value: 'all', checked: true }), scSel = h('input', { type: 'radio', name: 'peScope', value: 'sel' });
+  const eAll = h('span', { class: 'muted' }, '（計算大小中…）'), eSel = h('span', { class: 'muted' }, '（計算大小中…）');
+  peEstimate(PE.pages).then(b => { eAll.textContent = `（約 ${peMB(b)}）`; }).catch(() => { eAll.textContent = ''; });
+  if (canSel) peEstimate(sel).then(b => { eSel.textContent = `（約 ${peMB(b)}）`; }).catch(() => { eSel.textContent = ''; });
   const body = h('div', {},
-    h('p', { style: 'margin-top:0' }, `會把 ${PE.pages.length} 頁合併成一個 PDF，標註直接印在頁面上。`),
     h('label', { class: 'pe-fn' }, h('b', {}, '檔名'), nameIn, h('span', { class: 'muted' }, '.pdf')),
+    canSel ? h('div', { class: 'pe-scope' },
+      h('label', {}, scAll, `全部 ${PE.pages.length} 頁`, eAll),
+      h('label', {}, scSel, `只有選取的 ${sel.length} 頁`, eSel))
+      : h('p', { style: 'margin:0 0 12px' }, `會把 ${PE.pages.length} 頁合併成 PDF `, eAll, '，標註直接印在頁面上。'),
+    h('div', { class: 'pe-imgopt' }, h('b', {}, '上傳限制'), lim, h('span', {}, 'MB'),
+      h('label', { class: 'chk' + (PE.autoSplit ? ' on' : ''), style: 'margin:0' }, split, '超過時自動分割成多個檔案（畫質不變）')),
     h('label', { class: 'chk' + (PE.keepRec ? ' on' : '') }, keep, '同時存一份編輯紀錄（.pdfedit），之後可以打開繼續修改'),
-    h('p', { class: 'muted' }, '按「選擇資料夾並匯出」後，選擇要存放的資料夾。'));
-  keep.addEventListener('change', () => keep.parentNode.classList.toggle('on', keep.checked));
+    h('p', { class: 'muted' }, '匯出時會先做不傷畫質的壓縮（相同的圖片、字型只存一份）。按「選擇資料夾並匯出」後，選擇要存放的資料夾。'));
+  [keep, split].forEach(c => c.addEventListener('change', () => c.parentNode.classList.toggle('on', c.checked)));
   const pr = modal('匯出 PDF', body, [{ label: '取消', value: false }, { label: '選擇資料夾並匯出', value: true, primary: true }]);
   setTimeout(() => { nameIn.focus(); nameIn.select(); }, 30);
   if (!await pr) return;
   PE.name = nameIn.value.trim(); const base = peFileName();
-  PE.keepRec = keep.checked;
+  PE.keepRec = keep.checked; PE.autoSplit = split.checked; PE.limitMB = Math.max(0.1, +lim.value || 8);
+  ls.set('peLimitMB', PE.limitMB); ls.set('peAutoSplit', PE.autoSplit);
+  const pages = canSel && scSel.checked ? sel : PE.pages, L = peLimit();
   const dir = await pePickOut(); if (!dir) return;
-  if (await fileExists(dir, base + '.pdf') && !await confirmBox('檔案已存在', `「${esc(dir.name)}」裡已經有「${esc(base)}.pdf」，要覆蓋嗎？`, '覆蓋')) return;
+  let files, total = 0;
+  const rasterNote = [];
   try {
     peBusy('匯出中…');
-    const bytes = await peBuildPdf((i, n) => peBusy(`匯出中… ${i} / ${n} 頁`));
+    const bytes = await peBuildPdf((i, n) => peBusy(`匯出中… ${i} / ${n} 頁`), { pages });
+    total = bytes.length;
+    if (bytes.length <= L || !PE.autoSplit || pages.length < 1) files = [{ name: base, pages, bytes }];
+    else {
+      peBusy('檔案超過上傳限制，正在分割…');
+      const plan = await peSplitPlan(pages, L, t => peBusy(t));
+      if (!plan) { peBusy(); return; }
+      files = [];
+      for (let gi = 0; gi < plan.length; gi++) {
+        const g = plan[gi];
+        peBusy(`產生第 ${gi + 1} / ${plan.length} 個檔案…`);
+        let b = await peBuildPdf(null, { pages: g.pages, raster: g.raster });
+        while (b.length > L && g.pages.length > 1) { // 預估有誤差時：把最後一頁移到下一個檔
+          const last = g.pages.pop(), nx = plan[gi + 1];
+          if (nx && !nx.keep && !nx.pages.some(p => g.raster[p.id])) nx.pages.unshift(last);
+          else plan.splice(gi + 1, 0, { pages: [last], raster: g.raster });
+          b = await peBuildPdf(null, { pages: g.pages, raster: g.raster });
+        }
+        files.push({ pages: g.pages, bytes: b });
+        for (const p of g.pages) if (g.raster[p.id]) rasterNote.push(`第 ${pages.indexOf(p) + 1} 頁改用 ${g.raster[p.id]} dpi`);
+      }
+      let k = 0;
+      for (const f of files) { const a = k + 1; k += f.pages.length; f.name = `${base}(${a === k ? a : a + '-' + k}頁)`; }
+    }
+    peBusy();
+    const names = files.map(f => f.name + '.pdf').concat(PE.keepRec ? [base + '.pdfedit'] : []), exist = [];
+    for (const n of names) if (await fileExists(dir, n)) exist.push(n);
+    if (exist.length && !await confirmBox('檔案已存在', `「${esc(dir.name)}」裡已經有：<br>${exist.map(esc).join('<br>')}<br>要覆蓋嗎？`, '覆蓋')) return;
     peBusy('存檔中…');
-    await writeFile(dir, base + '.pdf', new Blob([bytes], { type: 'application/pdf' }));
+    for (const f of files) await writeFile(dir, f.name + '.pdf', new Blob([f.bytes], { type: 'application/pdf' }));
     if (PE.keepRec) await writeFile(dir, base + '.pdfedit', new Blob([await peRecordZip()]));
     PE.dirty = false;
   } catch (e) { console.error(e); peBusy(); await modal('匯出失敗', esc(e.message || String(e))); return; }
   peBusy();
   const btns = [{ label: '關閉', value: false, primary: !NATIVE }];
   if (NATIVE) btns.push({ label: '開啟資料夾', value: 'open', primary: true });
-  const r = await modal('匯出完成', `已存到「${esc(dir.name)}」：<ul><li>${esc(base)}.pdf</li>${PE.keepRec ? `<li>${esc(base)}.pdfedit（編輯紀錄）</li>` : ''}</ul>`, btns);
+  const over = files.filter(f => f.bytes.length > L);
+  const list = files.map(f => `<li><span class="nm">${esc(f.name)}.pdf</span><span>${f.pages.length} 頁</span><b>${peMB(f.bytes.length)}</b>${f.bytes.length > L ? '<span class="bad">⚠ 超過限制</span>' : '<span class="ok">✓</span>'}</li>`).join('')
+    + (PE.keepRec ? `<li><span class="nm">${esc(base)}.pdfedit（編輯紀錄）</span></li>` : '');
+  let msg = `<p style="margin-top:0">已存到「${esc(dir.name)}」：</p><ul class="pe-files">${list}</ul>`;
+  if (files.length > 1) msg += `<p>合併後約 ${peMB(total)}，超過上傳限制 ${PE.limitMB} MB，已依頁序<b>自動分割成 ${files.length} 個檔案</b>${over.length ? '' : '，每個都在限制以內'}。${rasterNote.length ? `${esc(rasterNote.join('、'))}，其他頁畫質沒有改變。` : '畫質沒有改變。'}</p>`;
+  else if (over.length) msg += `<p class="bad" style="color:#b3141f">⚠ 檔案 ${peMB(files[0].bytes.length)}，超過上傳限制 ${PE.limitMB} MB。${PE.autoSplit ? '' : '可以在匯出時勾選「超過時自動分割」。'}</p>`;
+  else msg += `<p style="color:#1f6b3a">✓ 符合 ${PE.limitMB} MB 上傳限制。</p>`;
+  if (over.length && files.length > 1) msg += `<p style="color:#b3141f">⚠ 有 ${over.length} 個檔案仍超過限制（選擇了「維持原樣」的頁面）。</p>`;
+  const r = await modal(files.length > 1 ? '匯出完成（已自動分割）' : '匯出完成', msg, btns);
   if (r === 'open') nativeOpenFolder(dir);
 }
 async function peSaveRecordOnly() {
