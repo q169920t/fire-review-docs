@@ -505,6 +505,22 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       check('PDF 編輯：分割檔頁數與內容正確', pc[0].pages === 2 && pc[1].pages === 1 && pc[2].pages === 1 && pc[0].text[1].includes('NOISE-700-2') && pc[1].text[0].includes('NOISE-700-3'), JSON.stringify(pc.map(x => x.text)));
     }
     await page.evaluate(() => peRender()); await sleep(1500);
+    // v2.3：超過限制時壓縮成單一檔案
+    await page.click('.pe-grid', { position: { x: 5, y: 5 } }); await sleep(200);
+    await page.click('#peExport'); await page.waitForSelector('.modal .pe-lim');
+    await page.fill('.modal .pe-name', 'comp測試'); await page.check('.modal input[name="peOver"][value="compress"]');
+    await page.click('.modal button:has-text("選擇資料夾並匯出")');
+    await page.waitForSelector('.modal .hd:has-text("壓縮成單一檔案")', { timeout: 60000 });
+    check('PDF 編輯：整份壓縮提供解析度選項', (await page.$$('.modal .pe-dpi')).length >= 2);
+    await page.waitForSelector('.modal button:has-text("使用選取的解析度"):not([disabled])', { timeout: 120000 });
+    await page.click('.modal button:has-text("使用選取的解析度")');
+    await page.waitForSelector('.modal .hd:has-text("匯出完成")', { timeout: 60000 });
+    check('PDF 編輯：壓縮成單一檔案的提示', (await page.textContent('.modal .bd')).includes('已壓縮成單一檔案'), await page.textContent('.modal .bd'));
+    await page.click('.modal button:has-text("關閉")');
+    { const f = path.join(W, 'pdfout', 'comp測試.pdf'); const ok = fs.existsSync(f);
+      const r = ok && JSON.parse(execFileSync('python3', [path.join(__dirname, 'pdf_check.py'), f, '[]']).toString());
+      check('PDF 編輯：壓縮後單一檔案、4 頁、不超過 1.5 MB', ok && r.pages === 4 && fs.statSync(f).size <= 1.5e6, ok ? String(fs.statSync(f).size) : 'missing'); }
+    check('PDF 編輯：記住超過限制時的處理方式', await page.evaluate(() => PE.overMode === 'compress'));
     check('PDF 編輯：超過限制的頁面醒目標示', !!(await page.$('.pe-card >> nth=3 >> .pe-csz.over')) && !!(await page.$('#peSize .pe-szp.over')));
     pick = path.join(W, 'root');
     await page.click('nav button:has-text("文件產出")'); await sleep(300);

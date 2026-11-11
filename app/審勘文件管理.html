@@ -290,7 +290,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const SETTINGS_FILE = '系統設定.json';
 const CASE_FILE = '案件資料.json';
-const APP_VERSION = '2.2';
+const APP_VERSION = '2.3';
 const TPL_DIR = 'templates';
 const BAD_CHARS = /[\\/:*?"<>|]/;
 const $ = s => document.querySelector(s);
@@ -2092,7 +2092,7 @@ const PE = {
     arrow: { color: '#d4202c', width: 2, dash: 'solid' }, pen: { color: '#1a5fd0', width: 2, dash: 'solid' }, hl: { color: '#ffd400', width: 12, dash: 'solid' }
   },
   font: undefined, fk: null, fkB: null, thumbs: new Map(), io: null, imgs: {}, placing: null, stampKeys: {},
-  limitMB: +ls.get('peLimitMB', 8) || 8, autoSplit: ls.get('peAutoSplit', true) !== false
+  limitMB: +ls.get('peLimitMB', 8) || 8, overMode: ls.get('peOverMode', ls.get('peAutoSplit', true) === false ? 'none' : 'split')
 };
 
 /* ---------- 函式庫與字型 ---------- */
@@ -3326,7 +3326,15 @@ async function peSizeUpdate() {
 }
 
 /* ---------- 轉成圖片（縮小過大的頁面） ---------- */
-// 頁面上圖片的原始解析度（取最高的那張大圖）；沒有大圖（向量圖）回傳 0
+// 頁面上圖片的原始解析度與覆蓋頁面的比例（掃描頁通常接近 1）
+async function peImgCover(pg) {
+  if (!pg.src) return 0;
+  const s = PE.srcs[pg.src], lib = await peLib(s); if (lib.isEncrypted) return 1;
+  const p = lib.getPage(pg.idx), b = p.getCropBox(), del = new Set(pg.del || []);
+  let a = 0; for (const o of peFindImages(lib.context, p.node)) if (!del.has(o.k) && o.iw) a += (o.x1 - o.x0) * (o.y1 - o.y0);
+  return Math.min(1, a / (b.width * b.height));
+}
+// 頁面上圖片的原始解析度（取佔頁面面積最多的）；沒有圖片（向量圖）回傳 0
 async function peNativeDpi(pg) {
   if (!pg.src) return 0;
   const s = PE.srcs[pg.src], lib = await peLib(s); if (lib.isEncrypted) return 200;
@@ -3344,7 +3352,7 @@ async function peNativeDpi(pg) {
   return Math.round(list[list.length - 1][0]);
 }
 // 把頁面畫成指定解析度的圖片放進 PDF：灰階頁存灰階；JPEG（高畫質）與無損壓縮取較小的
-async function pePlaceRaster(out, page, pg, dpi, W, H, onCanvas) {
+async function pePlaceRaster(out, page, pg, dpi, W, H, onCanvas, q = 0.92) {
   const L = PDFLib, c = await peRenderTo(document.createElement('canvas'), pg, dpi / 72);
   if (onCanvas) onCanvas(c);
   const g = c.getContext('2d', { willReadFrequently: true }), d = g.getImageData(0, 0, c.width, c.height).data, n = c.width * c.height;
@@ -3354,7 +3362,7 @@ async function pePlaceRaster(out, page, pg, dpi, W, H, onCanvas) {
   if (gray) for (let i = 0, j = 0; j < n; i += 4, j++) raw[j] = d[i + 1];
   else for (let i = 0, j = 0; i < d.length; i += 4, j += 3) { raw[j] = d[i]; raw[j + 1] = d[i + 1]; raw[j + 2] = d[i + 2]; }
   const fl = out.context.flateStream(raw, { Type: 'XObject', Subtype: 'Image', Width: c.width, Height: c.height, ColorSpace: gray ? 'DeviceGray' : 'DeviceRGB', BitsPerComponent: 8 });
-  const jb = await peBlobBytes(await new Promise(r => c.toBlob(r, 'image/jpeg', 0.92)));
+  const jb = await peBlobBytes(await new Promise(r => c.toBlob(r, 'image/jpeg', q)));
   if (jb.length < fl.contents.length) { const jpg = await out.embedJpg(jb); page.drawImage(jpg, { x: 0, y: 0, width: W, height: H }); }
   else {
     const name = page.node.newXObject('Rs', out.context.register(fl));
@@ -3419,6 +3427,75 @@ async function peOversizeDialog(pg, num, solo, lim) {
   if (r === 'use' && pick != null) return { dpi: pick, size: res[pick].size };
   return r === 'keep' ? { keep: true } : null;
 }
+// 整份壓縮成單一檔案：掃描頁（圖片蓋住大半頁）降低解析度，向量圖頁不動。列出幾種解析度試算大小與預覽
+const PE_COMPRESS_Q = 0.75; // 掃描文件用的 JPEG 品質（試算後文字仍清楚）
+async function peCompressDialog(pages, total, lim) {
+  peBusy('分析掃描頁…');
+  const scans = [];
+  try {
+    await peLibs();
+    for (const pg of pages) {
+      if ((await peImgCover(pg)) < 0.3) continue;
+      const d = await peNativeDpi(pg); if (d > 0) scans.push({ pg, d });
+    }
+  } finally { peBusy(); }
+  if (!scans.length) {
+    const r = await modal('沒有可以壓縮的掃描頁', `<p style="margin-top:0">檔案約 ${peMB(total)}，超過上傳限制 ${PE.limitMB} MB，但這份文件沒有掃描圖片可以降低解析度（多半是向量圖）。</p><p>要改成分割成多個檔案嗎？</p>`,
+      [{ label: '取消匯出', value: false }, { label: '分割成多個檔案', value: true, primary: true }]);
+    return r ? { split: true } : null;
+  }
+  const maxD = Math.max(...scans.map(x => x.d));
+  let opts = [300, 250, 200, 150, 120, 100, 75].filter(d => d < maxD * 0.97);
+  if (!opts.length) opts = [Math.max(50, Math.round(maxD * 0.7))];
+  const plan = d => Object.fromEntries(scans.filter(x => d < x.d * 0.97).map(x => [x.pg.id, d])); // 原本就比較低的頁不動
+  const res = {}, rows = h('div', { class: 'pe-dpis' }), prevBox = h('div', { class: 'pe-dpiprev muted' }, '試算完成後可以看清晰度預覽');
+  let pick = null, stop = false;
+  const show = d => {
+    pick = d; rows.querySelectorAll('.pe-dpi').forEach(r => r.classList.toggle('on', +r.dataset.d === d));
+    const r = res[d]; prevBox.innerHTML = '';
+    if (r && r.crop) prevBox.append(h('div', {}, `${d} dpi 實際大小的局部（第 ${pages.indexOf(scans[0].pg) + 1} 頁中央）：`), r.crop);
+  };
+  for (const d of opts) rows.append(h('div', { class: 'pe-dpi', 'data-d': d, onclick: () => { if (res[d]) show(d); } },
+    h('b', {}, `${d} dpi`), h('span', { class: 'sz' }, '等待試算'), h('span', { class: 'ok' })));
+  const nd = [...new Set(scans.map(x => x.d))].sort((a, b) => b - a);
+  const body = h('div', {},
+    h('p', { style: 'margin-top:0' }, `檔案約 ${peMB(total)}，超過上傳限制 ${PE.limitMB} MB。可以把 ${scans.length} 頁掃描頁（原本約 ${nd.slice(0, 3).join('、')} dpi）降低解析度，壓縮成單一檔案${pages.length - scans.length ? `；其他 ${pages.length - scans.length} 頁（向量圖）不受影響` : ''}。`),
+    rows, prevBox,
+    h('p', { class: 'muted', style: 'margin-bottom:0' }, '解析度越低檔案越小，但越模糊；會先幫你選符合限制裡最高的那個。在頁面上畫的標註仍然是清楚的向量。'));
+  const pr = modal('檔案太大，壓縮成單一檔案', body, [{ label: '取消匯出', value: false }, { label: '改成分割（畫質不變）', value: 'split' }, { label: '使用選取的解析度', value: 'use', primary: true }]);
+  const useBtn = () => [...document.querySelectorAll('.modal .ft .btn')].find(b => b.textContent === '使用選取的解析度');
+  if (useBtn()) useBtn().disabled = true;
+  (async () => {
+    let fits = 0;
+    for (const d of opts) {
+      if (stop || !document.body.contains(rows)) return;
+      if (fits >= 2) break; // 找到符合的之後再多算一個就停，節省時間
+      const row = rows.querySelector(`[data-d="${d}"]`);
+      let crop = null, first = true;
+      try {
+        const b = await peBuildPdf((i, n) => { if (row) row.querySelector('.sz').textContent = `試算中… ${i} / ${n} 頁`; }, {
+          pages, raster: plan(d), jpegQ: PE_COMPRESS_Q, onCanvas: c => {
+            if (!first) return; first = false;
+            const cw = Math.min(c.width, Math.round(3 * d)), ch = Math.min(c.height, Math.round(2 * d));
+            const x = h('canvas', { class: 'pe-checker' }); x.width = cw; x.height = ch;
+            x.getContext('2d').drawImage(c, (c.width - cw) / 2, (c.height - ch) / 2, cw, ch, 0, 0, cw, ch);
+            x.style.width = '432px'; x.style.height = Math.round(432 * ch / cw) + 'px'; crop = x;
+          } });
+        res[d] = { bytes: b, crop };
+        row.querySelector('.sz').textContent = peMB(b.length);
+        row.querySelector('.ok').textContent = b.length <= lim ? '✓ 符合' : '✗ 仍超過';
+        row.classList.toggle('bad', b.length > lim); row.classList.add('ready');
+        if (b.length <= lim) { fits++; if (pick == null) { show(d); if (useBtn()) useBtn().disabled = false; } }
+      } catch (e) { console.warn(e); if (row) row.querySelector('.sz').textContent = '無法試算'; }
+    }
+    rows.querySelectorAll('.pe-dpi:not(.ready) .sz').forEach(e => { e.textContent = '（不需要試算）'; });
+    if (pick == null) { const ok = opts.filter(d => res[d]); if (ok.length) { show(ok[ok.length - 1]); if (useBtn()) useBtn().disabled = false; } }
+  })();
+  const r = await pr; stop = true;
+  if (r === 'use' && pick != null) return { bytes: res[pick].bytes, dpi: pick };
+  return r === 'split' ? { split: true } : null;
+}
+
 // 依頁序把頁面分成每個都不超過限制的幾組；回傳 [{ pages, a, b, raster }] 或 null（取消）
 async function peSplitPlan(pages, lim, prog) {
   const raster = {}, solo = new Map(), keep = new Set();
@@ -3780,7 +3857,7 @@ async function peBuildPdf(progress, opt = {}) {
     let page;
     if (!pg.src) { page = out.addPage([pg.w, pg.h]); }
     else if (isR) { // 加密的檔案用 200 dpi；太大的頁面用使用者選的解析度
-      page = out.addPage([W, H]); await pePlaceRaster(out, page, pg, rs[pg.id] || 200, W, H, opt.onCanvas);
+      page = out.addPage([W, H]); await pePlaceRaster(out, page, pg, rs[pg.id] || 200, W, H, opt.onCanvas, opt.jpegQ || (raster[pg.src] ? 0.9 : 0.92));
     } else {
       page = out.addPage(copied[pg.src][pg.idx].shift());
       page.setRotation(L.degrees(t));
@@ -3823,7 +3900,8 @@ async function peExport() {
   const sel = PE.pages.filter(p => PE.sel.has(p.id)), canSel = sel.length > 0 && sel.length < PE.pages.length;
   const keep = h('input', { type: 'checkbox', checked: PE.keepRec }), nameIn = peNameInput();
   const lim = h('input', { type: 'number', class: 'pe-lim', min: 0.1, max: 2000, step: 0.5, value: PE.limitMB });
-  const split = h('input', { type: 'checkbox', checked: PE.autoSplit });
+  const ovm = [['compress', '壓縮成單一檔案（降低掃描頁的解析度，可選解析度）'], ['split', '分割成多個檔案（畫質不變）'], ['none', '不處理']].map(([v, t]) =>
+    h('label', {}, h('input', { type: 'radio', name: 'peOver', value: v, checked: PE.overMode === v }), t));
   const scAll = h('input', { type: 'radio', name: 'peScope', value: 'all', checked: true }), scSel = h('input', { type: 'radio', name: 'peScope', value: 'sel' });
   const eAll = h('span', { class: 'muted' }, '（計算大小中…）'), eSel = h('span', { class: 'muted' }, '（計算大小中…）');
   peEstimate(PE.pages).then(b => { eAll.textContent = `（約 ${peMB(b)}）`; }).catch(() => { eAll.textContent = ''; });
@@ -3834,17 +3912,18 @@ async function peExport() {
       h('label', {}, scAll, `全部 ${PE.pages.length} 頁`, eAll),
       h('label', {}, scSel, `只有選取的 ${sel.length} 頁`, eSel))
       : h('p', { style: 'margin:0 0 12px' }, `會把 ${PE.pages.length} 頁合併成 PDF `, eAll, '，標註直接印在頁面上。'),
-    h('div', { class: 'pe-imgopt' }, h('b', {}, '上傳限制'), lim, h('span', {}, 'MB'),
-      h('label', { class: 'chk' + (PE.autoSplit ? ' on' : ''), style: 'margin:0' }, split, '超過時自動分割成多個檔案（畫質不變）')),
+    h('div', { class: 'pe-imgopt' }, h('b', {}, '上傳限制'), lim, h('span', {}, 'MB')),
+    h('div', { class: 'pe-scope' }, h('b', {}, '超過上傳限制時'), ...ovm),
     h('label', { class: 'chk' + (PE.keepRec ? ' on' : '') }, keep, '同時存一份編輯紀錄（.pdfedit），之後可以打開繼續修改'),
     h('p', { class: 'muted' }, '匯出時會先做不傷畫質的壓縮（相同的圖片、字型只存一份）。按「選擇資料夾並匯出」後，選擇要存放的資料夾。'));
-  [keep, split].forEach(c => c.addEventListener('change', () => c.parentNode.classList.toggle('on', c.checked)));
+  keep.addEventListener('change', () => keep.parentNode.classList.toggle('on', keep.checked));
   const pr = modal('匯出 PDF', body, [{ label: '取消', value: false }, { label: '選擇資料夾並匯出', value: true, primary: true }]);
   setTimeout(() => { nameIn.focus(); nameIn.select(); }, 30);
   if (!await pr) return;
   PE.name = nameIn.value.trim(); const base = peFileName();
-  PE.keepRec = keep.checked; PE.autoSplit = split.checked; PE.limitMB = Math.max(0.1, +lim.value || 8);
-  ls.set('peLimitMB', PE.limitMB); ls.set('peAutoSplit', PE.autoSplit);
+  PE.keepRec = keep.checked; PE.limitMB = Math.max(0.1, +lim.value || 8);
+  PE.overMode = (body.querySelector('input[name="peOver"]:checked') || {}).value || 'split';
+  ls.set('peLimitMB', PE.limitMB); ls.set('peOverMode', PE.overMode);
   const pages = canSel && scSel.checked ? sel : PE.pages, L = peLimit();
   const dir = await pePickOut(); if (!dir) return;
   let files, total = 0;
@@ -3853,7 +3932,16 @@ async function peExport() {
     peBusy('匯出中…');
     const bytes = await peBuildPdf((i, n) => peBusy(`匯出中… ${i} / ${n} 頁`), { pages });
     total = bytes.length;
-    if (bytes.length <= L || !PE.autoSplit || pages.length < 1) files = [{ name: base, pages, bytes }];
+    let mode = PE.overMode;
+    if (bytes.length > L && mode === 'compress') {
+      peBusy();
+      const r = await peCompressDialog(pages, bytes.length, L);
+      if (!r) return;
+      if (r.split) mode = 'split';
+      else { files = [{ name: base, pages, bytes: r.bytes }]; rasterNote.push(`掃描頁改用 ${r.dpi} dpi`); }
+    }
+    if (files) { /* 已壓縮成單一檔案 */ }
+    else if (bytes.length <= L || mode !== 'split') files = [{ name: base, pages, bytes }];
     else {
       peBusy('檔案超過上傳限制，正在分割…');
       const plan = await peSplitPlan(pages, L, t => peBusy(t));
@@ -3891,8 +3979,9 @@ async function peExport() {
   const list = files.map(f => `<li><span class="nm">${esc(f.name)}.pdf</span><span>${f.pages.length} 頁</span><b>${peMB(f.bytes.length)}</b>${f.bytes.length > L ? '<span class="bad">⚠ 超過限制</span>' : '<span class="ok">✓</span>'}</li>`).join('')
     + (PE.keepRec ? `<li><span class="nm">${esc(base)}.pdfedit（編輯紀錄）</span></li>` : '');
   let msg = `<p style="margin-top:0">已存到「${esc(dir.name)}」：</p><ul class="pe-files">${list}</ul>`;
-  if (files.length > 1) msg += `<p>合併後約 ${peMB(total)}，超過上傳限制 ${PE.limitMB} MB，已依頁序<b>自動分割成 ${files.length} 個檔案</b>${over.length ? '' : '，每個都在限制以內'}。${rasterNote.length ? `${esc(rasterNote.join('、'))}，其他頁畫質沒有改變。` : '畫質沒有改變。'}</p>`;
-  else if (over.length) msg += `<p class="bad" style="color:#b3141f">⚠ 檔案 ${peMB(files[0].bytes.length)}，超過上傳限制 ${PE.limitMB} MB。${PE.autoSplit ? '' : '可以在匯出時勾選「超過時自動分割」。'}</p>`;
+  if (files.length === 1 && rasterNote.length) msg += `<p style="color:${over.length ? '#b3141f' : '#1f6b3a'}">原本約 ${peMB(total)}，已壓縮成單一檔案（${esc(rasterNote[0])}）${over.length ? `，仍超過上傳限制 ${PE.limitMB} MB` : `，${over.length ? '' : '✓ '}符合 ${PE.limitMB} MB 上傳限制`}。</p>`;
+  else if (files.length > 1) msg += `<p>合併後約 ${peMB(total)}，超過上傳限制 ${PE.limitMB} MB，已依頁序<b>自動分割成 ${files.length} 個檔案</b>${over.length ? '' : '，每個都在限制以內'}。${rasterNote.length ? `${esc(rasterNote.join('、'))}，其他頁畫質沒有改變。` : '畫質沒有改變。'}</p>`;
+  else if (over.length) msg += `<p class="bad" style="color:#b3141f">⚠ 檔案 ${peMB(files[0].bytes.length)}，超過上傳限制 ${PE.limitMB} MB。${PE.overMode === 'none' ? '可以在匯出時選擇「壓縮成單一檔案」或「分割成多個檔案」。' : ''}</p>`;
   else msg += `<p style="color:#1f6b3a">✓ 符合 ${PE.limitMB} MB 上傳限制。</p>`;
   if (over.length && files.length > 1) msg += `<p style="color:#b3141f">⚠ 有 ${over.length} 個檔案仍超過限制（選擇了「維持原樣」的頁面）。</p>`;
   const r = await modal(files.length > 1 ? '匯出完成（已自動分割）' : '匯出完成', msg, btns);
