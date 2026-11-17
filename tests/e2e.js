@@ -297,7 +297,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check('PDF 編輯：刪除頁面', (await order()).join() === 'B1,A1');
     await page.keyboard.press('Control+z'); await sleep(400);
     check('PDF 編輯：復原刪除', (await order()).join() === 'B1,A1,A2');
-    await page.click('.pe-card >> nth=2'); await page.click('button:has-text("在選取頁後插入空白頁")'); await sleep(300);
+    await page.click('.pe-card >> nth=2'); await page.click('button[title="在選取頁後插入空白頁"]'); await sleep(300);
     check('PDF 編輯：插入空白頁', (await order()).join() === 'B1,A1,A2,blank');
     // 標註：在第 3 頁（A2）上畫
     await page.dblclick('.pe-card >> nth=2'); await page.waitForSelector('.pe-page'); await sleep(300);
@@ -395,16 +395,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     const ovC = await page.$('.pe-page >> nth=0 >> .pe-ov'); const zc = await page.evaluate(() => PE.zoom);
     const atC = async (x, y) => { const b = await ovC.boundingBox(); return [b.x + x * zc, b.y + y * zc]; };
     await page.click('.pe-tb [data-tool="objdel"]'); await page.waitForSelector('.pe-obj');
-    const objs = await page.evaluate(() => peObjList(PE.pages[0]).map(o => [o.k, Math.round(o.x), Math.round(o.y), Math.round(o.w), Math.round(o.h)]));
+    const objs = await page.evaluate(() => peObjList(PE.pages[0]).filter(o => o.kind === 'img').map(o => [o.k, Math.round(o.x), Math.round(o.y), Math.round(o.w), Math.round(o.h)]));
     check('PDF 編輯：找到頁面上的 3 張圖片（含子圖層裡的）', objs.length === 3, JSON.stringify(objs));
     // C.pdf：紅圖 (100,742)-(200,842)→畫面 y=0..100；綠圖在子圖層 (100,500)
-    { const [x, y] = await atC(150, 75); await page.mouse.click(x, y); await sleep(500); }
-    { const [x, y] = await atC(150, 292); await page.mouse.click(x, y); await sleep(500); }
-    check('PDF 編輯：點選刪除兩張圖片', await page.evaluate(() => (PE.pages[0].del || []).length) === 2, JSON.stringify(await page.evaluate(() => PE.pages[0].del)));
-    check('PDF 編輯：刪除後剩 1 張可選', await page.evaluate(() => peObjList(PE.pages[0]).length) === 1);
+    { const [x, y] = await atC(150, 75); await page.mouse.click(x, y); await sleep(300); }
+    check('PDF 編輯：點一下選取圖片（出現紅色標示）', await page.evaluate(() => PE.objSel && PE.objSel.keys.size === 1) && !!(await page.$('.pe-os.sel')));
+    await page.keyboard.down('Shift'); { const [x, y] = await atC(150, 292); await page.mouse.click(x, y); await sleep(300); } await page.keyboard.up('Shift');
+    check('PDF 編輯：Shift 加選第二張圖片', await page.evaluate(() => PE.objSel && PE.objSel.keys.size === 2));
+    await page.keyboard.press('Delete'); await sleep(500);
+    check('PDF 編輯：按 Delete 刪除選取的兩張圖片', await page.evaluate(() => (PE.pages[0].del || []).length) === 2 && await page.evaluate(() => !PE.objSel), JSON.stringify(await page.evaluate(() => PE.pages[0].del)));
+    check('PDF 編輯：刪除後剩 1 張可選', await page.evaluate(() => peObjList(PE.pages[0]).filter(o => o.kind === 'img').length) === 1);
     await page.keyboard.press('Control+z'); await sleep(300);
-    check('PDF 編輯：復原刪除圖片', await page.evaluate(() => (PE.pages[0].del || []).length) === 1);
+    check('PDF 編輯：復原刪除圖片', await page.evaluate(() => (PE.pages[0].del || []).length) === 0);
     await page.keyboard.press('Control+y'); await sleep(300);
+    check('PDF 編輯：重做刪除圖片', await page.evaluate(() => (PE.pages[0].del || []).length) === 2);
     // 文字格式
     await page.click('.pe-tb [data-tool="text"]');
     { const [x, y] = await atC(300, 600); await page.mouse.click(x, y); }
@@ -459,6 +463,64 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check('PDF 編輯：匯出後沒有原有註解、剩 1 張原圖', res2.annots[0] === 0 && res2.imgsizes[0].filter(z => z[0] === 40).length === 1, JSON.stringify([res2.annots, res2.imgsizes]));
     check('PDF 編輯：文字底色與字印出', res2.boxes[3].yellow > 200 && res2.boxes[3].red > 50, JSON.stringify(res2.boxes[3]));
     check('PDF 編輯：印章印在正確位置', res2.boxes[4].red > 100, JSON.stringify(res2.boxes[4]));
+
+    // 5c2. v2.4：頁碼打勾不閃爍；刪除原有的文字、線條、色塊（點選、Shift 加選、拖曳框選）
+    await page.click('button[title="清除目前的全部內容，重新開始"]'); await sleep(200);
+    if (await page.isVisible('.modal')) await page.click('.modal .btn.primary');
+    await page.waitForSelector('.pe-empty');
+    fc = page.waitForEvent('filechooser'); await page.click('.pe-empty button:has-text("選擇 PDF 檔")');
+    await (await fc).setFiles(path.join(W, 'pdf/F.pdf'));
+    await page.waitForFunction(() => document.querySelectorAll('.pe-card .pe-thumb canvas').length === 1, null, { timeout: 20000 });
+    await page.evaluate(() => { window.__cv = document.querySelector('.pe-card .pe-thumb canvas'); });
+    await page.hover('.pe-card'); await page.click('.pe-chk'); await sleep(200);
+    check('PDF 編輯：點圈圈打勾選取頁面', await page.evaluate(() => PE.sel.size === 1 && !!document.querySelector('.pe-chk.on') && document.querySelector('.pe-card').classList.contains('sel')));
+    check('PDF 編輯：選取頁面時縮圖沒有重畫（不閃爍）', await page.evaluate(() => document.querySelector('.pe-card .pe-thumb canvas') === window.__cv));
+    await page.click('.pe-chk'); await sleep(150);
+    check('PDF 編輯：再點圈圈取消選取', await page.evaluate(() => PE.sel.size === 0 && !document.querySelector('.pe-chk.on')));
+    await page.dblclick('.pe-card >> nth=0'); await page.waitForSelector('.pe-page'); await sleep(300);
+    await page.evaluate(() => { PE.zoom = 0.8; peRender(); }); await sleep(800);
+    const ovF = await page.$('.pe-page >> nth=0 >> .pe-ov'); const zf = await page.evaluate(() => PE.zoom);
+    const atF = async (x, y) => { const b = await ovF.boundingBox(); return [b.x + x * zf, b.y + y * zf]; };
+    await page.click('.pe-tb [data-tool="objdel"]'); await page.waitForFunction(() => PE.tool === 'objdel' && peObjList(PE.pages[0]).length > 5, null, { timeout: 20000 });
+    const kinds = await page.evaluate(() => { const c = {}; peObjList(PE.pages[0]).forEach(o => { c[o.kind] = (c[o.kind] || 0) + 1; }); return c; });
+    check('PDF 編輯：找到文字與線條、形狀', kinds.text >= 4 && kinds.path >= 3, JSON.stringify(kinds));
+    { const [x, y] = await atF(120, 115); await page.mouse.move(x, y); await sleep(250); }
+    check('PDF 編輯：滑鼠移到物件上會標示', !!(await page.$('.pe-os.hov')));
+    { const [x, y] = await atF(120, 115); await page.mouse.click(x, y); await sleep(250); }
+    check('PDF 編輯：點選文字', await page.evaluate(() => PE.objSel && PE.objSel.keys.size === 1 && [...PE.objSel.keys][0].startsWith('t')), JSON.stringify(await page.evaluate(() => PE.objSel && [...PE.objSel.keys])));
+    await page.keyboard.down('Shift'); { const [x, y] = await atF(150, 242); await page.mouse.click(x, y); await sleep(250); } await page.keyboard.up('Shift');
+    check('PDF 編輯：Shift 加選線條', await page.evaluate(() => PE.objSel && PE.objSel.keys.size === 2 && [...PE.objSel.keys].some(k => k.startsWith('p'))));
+    { const [x, y] = await atF(150, 200); await page.mouse.click(x, y); await sleep(250); }
+    check('PDF 編輯：點空白處取消選取', await page.evaluate(() => !PE.objSel));
+    { const [x, y] = await atF(120, 115); await page.mouse.click(x, y); await sleep(200); }
+    await page.keyboard.down('Shift'); { const [x, y] = await atF(150, 242); await page.mouse.click(x, y); await sleep(200); }
+    { const [x0, y0] = await atF(90, 370), [x1, y1] = await atF(215, 452); await page.mouse.move(x0, y0); await page.mouse.down(); await page.mouse.move(x1, y1, { steps: 6 }); await sleep(100);
+      check('PDF 編輯：拖曳時出現框選框', !!(await page.$('.pe-band'))); await page.mouse.up(); await sleep(250); }
+    await page.keyboard.up('Shift');
+    check('PDF 編輯：框選加選色塊', await page.evaluate(() => PE.objSel && PE.objSel.keys.size === 3), JSON.stringify(await page.evaluate(() => PE.objSel && [...PE.objSel.keys])));
+    await page.keyboard.press('Delete'); await sleep(500);
+    check('PDF 編輯：刪除選取的文字、線條、色塊', await page.evaluate(() => (PE.pages[0].del || []).length) === 3);
+    // 同一行的兩段字：刪第一段，後面的字不能移位（AAA 用標準字型、CCC 用內嵌字型）
+    { const [x, y] = await atF(90, 633); await page.mouse.click(x, y); await sleep(200); await page.keyboard.press('Delete'); await sleep(400); }
+    { const [x, y] = await atF(90, 712); await page.mouse.click(x, y); await sleep(200); await page.keyboard.press('Delete'); await sleep(400); }
+    check('PDF 編輯：共刪除 5 個物件', await page.evaluate(() => (PE.pages[0].del || []).length) === 5, JSON.stringify(await page.evaluate(() => PE.pages[0].del)));
+    check('PDF 編輯：工具列顯示可還原的數量', (await page.textContent('.pe-tb')).includes('還原 5'));
+    pick = path.join(W, 'pdfout');
+    await page.click('#peExport'); await page.waitForSelector('.modal .pe-name');
+    await page.fill('.modal .pe-name', 'v24測試'); await page.click('.modal button:has-text("選擇資料夾並匯出")');
+    await page.waitForSelector('.modal .hd:has-text("匯出完成")', { timeout: 30000 }); await page.click('.modal button:has-text("關閉")');
+    const res4 = JSON.parse(execFileSync('python3', [path.join(__dirname, 'pdf_check.py'), path.join(W, 'pdfout', 'v24測試.pdf'), JSON.stringify([
+      [0, 80, 95, 150, 40], [0, 80, 236, 225, 12], [0, 95, 375, 115, 75], [0, 75, 520, 150, 30], [0, 80, 278, 40, 14],
+      [0, 78, 624, 40, 22], [0, 120, 624, 45, 22], [0, 80, 700, 40, 28], [0, 124, 700, 45, 28]])]).toString());
+    check('PDF 編輯：刪掉的紅字不見了', res4.boxes[0].red === 0, JSON.stringify(res4.boxes[0]));
+    check('PDF 編輯：刪掉的藍線不見了', res4.boxes[1].blue === 0, JSON.stringify(res4.boxes[1]));
+    check('PDF 編輯：刪掉的綠色塊不見了', res4.boxes[2].green === 0, JSON.stringify(res4.boxes[2]));
+    check('PDF 編輯：沒刪的黑字還在', res4.boxes[3].dark > 100 && res4.text[0].includes('KEEP-TEXT') && !res4.text[0].includes('REDTEXT'), JSON.stringify([res4.boxes[3], res4.text[0]]));
+    check('PDF 編輯：沒刪的斜線還在', res4.boxes[4].blue > 30, JSON.stringify(res4.boxes[4]));
+    check('PDF 編輯：刪掉標準字型的字', res4.boxes[5].red === 0 && res4.boxes[5].dark === 0, JSON.stringify(res4.boxes[5]));
+    check('PDF 編輯：同一行後面的字沒有移位（標準字型）、文字也從檔案移除', res4.boxes[6].dark > 40 && !res4.text[0].includes('AAA') && res4.text[0].includes('BBB'), JSON.stringify(res4.boxes[6]));
+    check('PDF 編輯：刪掉內嵌字型的字，文字也從檔案移除', res4.boxes[7].red === 0 && res4.boxes[7].dark === 0 && !res4.text[0].includes('CCC'), JSON.stringify([res4.boxes[7], res4.text[0]]));
+    check('PDF 編輯：同一行後面的字沒有移位（內嵌字型）', res4.boxes[8].dark > 40 && res4.text[0].includes('DDD'), JSON.stringify([res4.boxes[8], res4.text[0]]));
 
     // 5d. v2.2：檔案大小顯示、只匯出選取頁、超過上傳限制自動分割、單頁太大選解析度
     await page.click('button[title="清除目前的全部內容，重新開始"]'); await sleep(200);

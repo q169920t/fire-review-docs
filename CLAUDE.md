@@ -55,6 +55,8 @@
 - 編輯紀錄 `.pdfedit` = zip：`edit.json`（name、srcs、imgs、pages）+ `src/N.pdf` 原始檔 + `img/N.*` 插入的圖片。
 - 加密的來源檔無法直接複製頁面，匯出時改用 200 dpi 圖片。
 - 刪除原有圖片（v2.1）：`peLex()` 解析頁面內容，`peFindImages()` 找出每個畫圖片指令（含子圖層 Form 裡的）的位置；識別碼＝第幾個 Do/BI 指令，子圖層用 `5.2` 表示，存在頁面的 `pg.del`。偵測與刪除（`peStripImages()`）用同一套解析，永遠從**原始來源檔**算，不會因為刪過而錯位。子圖層與資源會先複製再改，不影響共用同一子圖層的其他頁；不再用到的圖片從資源拿掉，匯出前 `peGC()` 清掉沒人引用的物件，圖片才真的不在檔案裡。畫面用 `peSrcPage()` 產生刪除後的單頁版本顯示。橫跨整頁寬或高的圖片（掃描底圖、掃描條）不列出；重疊時依原本畫圖順序，最上面的點得到。
+- 刪除原有物件（v2.4，擴充上面的圖片刪除）：`peLex(b, true)`（完整模式）解析字串、陣列、路徑與文字運算子；`peScanLevel()` 掃描一層內容，回傳圖片、路徑（`p`＋序號）、文字（`t`＋序號）的位置、點列與在內容中的範圍，`peFindObjects()` 遞迴子圖層並存成欄位式陣列（`s.objs[idx]`：`k/kd/bb/gs/ge/fl/pool/hide`）。識別碼仍存在 `pg.del`，圖片的編號和舊版相同（舊 .pdfedit 可用）。`peStripImages()` 同時處理三種：路徑整段刪掉；文字有字寬資料（`font.known`：Widths、CID 的 W/DW、標準字型用 `peStdInit()` 從 pdf-lib 取字寬表）時換成同寬的 `[n] TJ` 位移（後面的字不移位、文字真的消失），查不到字寬時改成 `3 Tr … 原本的 Tr`（隱形）。操作：`PE.objSel`（選取）、`PE.objHover`、`PE.band`（框選），`peObjHit()`（點到：描邊看距離、填色看是否在內，同點選面積最小）、`peObjBand()`（完全在框內），Delete 呼叫 `peObjDelete()`。大圖片（橫跨整頁寬或高）與太小的圖片不列出。
+- 介面：按鈕用 `peAb(icon, label, opt)`（圖示＋短文字，label 空白＝只有圖示）；頁面整理的打勾圓圈 `.pe-chk`，選取變更只呼叫 `peRefreshSel()`（更新 class 與上方列），不可再用 `peRender()`（會讓縮圖閃爍）。
 - 清除原有註解：頁面 `pg.noAnn = true`，畫面用 pdf.js `AnnotationMode.DISABLE`，匯出時刪 `/Annots`。`peSig(pg)` 是 del＋noAnn 的簽名，縮圖快取與復原後重畫都看它。
 - 文字框格式：`bold`、`italic`、`underline`、`align`、`fill`（底色，null＝無）、`bcolor`（框線色，沒有時沿用 `color`）。`字型\` 檔名含 Bold／粗 的當粗體字型（`PE.fkB`）；有一般字型但沒粗體字型時用描邊加粗（`peFakeBold`）。斜體＝傾斜 `PE_ITAL`，畫面用 transform、匯出直接算在字形路徑上。
 - 圖片標註 `{type:'img', key, x, y, w, h, r}`：圖片資料放在 `PE.imgs[key]`（不放進復原紀錄），編輯紀錄 ver 2 存在 `img/N.png|jpg`。去白底 `peKnockout()`。印章庫＝系統資料夾 `印章庫\`（PNG/JPG＋`印章庫.json` 記預設寬度公分），同事共用；不可放進 GitHub。

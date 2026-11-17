@@ -62,3 +62,19 @@ noise_pdf('pdf/D.pdf', 3, 700); noise_pdf('pdf/E.pdf', 1, 1400)
 # 中文字型（有系統字型才放；沒有時程式會改用圖片方式匯出文字）
 for f in ['/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc']:
     if os.path.exists(f): shutil.copy(f, os.path.join(W, 'root/字型', os.path.basename(f))); break
+
+# v2.4 測試用：F.pdf 有向量的文字、線條、色塊（刪除原有物件用）
+import reportlab, glob
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+vera = glob.glob(os.path.join(os.path.dirname(reportlab.__file__), 'fonts', 'Vera.ttf'))
+if vera: pdfmetrics.registerFont(TTFont('Vera', vera[0]))
+c = canvas.Canvas(os.path.join(W, 'pdf/F.pdf'), pagesize=A4)
+c.setFillColorRGB(.85, .1, .1); c.setFont('Helvetica', 30); c.drawString(80, 720, 'REDTEXT')
+c.setStrokeColorRGB(.1, .2, .9); c.setLineWidth(4); c.line(80, 600, 300, 600); c.line(80, 560, 300, 520)
+c.setFillColorRGB(.1, .7, .2); c.rect(100, 400, 100, 60, fill=1, stroke=0)
+c.setFillColorRGB(0, 0, 0); c.setFont('Helvetica', 20); c.drawString(80, 300, 'KEEP-TEXT')
+t = c.beginText(80, 200); t.setFont('Helvetica', 20); t.setFillColorRGB(.85, .1, .1); t.textOut('AAA'); t.setFillColorRGB(0, 0, 0); t.textOut('BBB'); c.drawText(t)
+if vera:
+    t = c.beginText(80, 120); t.setFont('Vera', 20); t.setFillColorRGB(.85, .1, .1); t.textOut('CCC'); t.setFillColorRGB(0, 0, 0); t.textOut('DDD'); c.drawText(t)
+c.showPage(); c.save()
