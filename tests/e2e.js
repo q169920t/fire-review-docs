@@ -368,7 +368,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check('PDF 編輯：沒有標註的地方是空白', res.boxes[3].red === 0 && res.boxes[3].dark === 0, JSON.stringify(res.boxes[3]));
     // 清除後重新開啟編輯紀錄
     const before = await page.evaluate(() => JSON.stringify(PE.pages.map(p => [p.rot, p.anns.length])));
-    await page.click('button[title="清除目前的全部內容，重新開始"]'); await sleep(200);
+    await page.click('#peReset'); await sleep(200);
     if (await page.isVisible('.modal')) await page.click('.modal .btn.primary');
     await page.waitForSelector('.pe-empty');
     fc = page.waitForEvent('filechooser'); await page.click('.pe-empty button:has-text("開啟編輯紀錄")');
@@ -380,7 +380,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check('PDF 編輯：編輯紀錄保留檔名', (await page.evaluate(() => PE.name)) === '測試合併');
 
     // 5c. v2.1：刪除原有圖片、清除原有註解、文字格式、插入圖片、印章庫
-    await page.click('button[title="清除目前的全部內容，重新開始"]'); await sleep(200);
+    await page.click('#peReset'); await sleep(200);
     if (await page.isVisible('.modal')) await page.click('.modal .btn.primary');
     await page.waitForSelector('.pe-empty');
     fc = page.waitForEvent('filechooser'); await page.click('.pe-empty button:has-text("選擇 PDF 檔")');
@@ -465,7 +465,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check('PDF 編輯：印章印在正確位置', res2.boxes[4].red > 100, JSON.stringify(res2.boxes[4]));
 
     // 5c2. v2.4：頁碼打勾不閃爍；刪除原有的文字、線條、色塊（點選、Shift 加選、拖曳框選）
-    await page.click('button[title="清除目前的全部內容，重新開始"]'); await sleep(200);
+    await page.click('#peReset'); await sleep(200);
     if (await page.isVisible('.modal')) await page.click('.modal .btn.primary');
     await page.waitForSelector('.pe-empty');
     fc = page.waitForEvent('filechooser'); await page.click('.pe-empty button:has-text("選擇 PDF 檔")');
@@ -523,7 +523,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check('PDF 編輯：同一行後面的字沒有移位（內嵌字型）', res4.boxes[8].dark > 40 && res4.text[0].includes('DDD'), JSON.stringify([res4.boxes[8], res4.text[0]]));
 
     // 5d. v2.2：檔案大小顯示、只匯出選取頁、超過上傳限制自動分割、單頁太大選解析度
-    await page.click('button[title="清除目前的全部內容，重新開始"]'); await sleep(200);
+    await page.click('#peReset'); await sleep(200);
     if (await page.isVisible('.modal')) await page.click('.modal .btn.primary');
     await page.waitForSelector('.pe-empty');
     fc = page.waitForEvent('filechooser'); await page.click('.pe-empty button:has-text("選擇 PDF 檔")');
@@ -585,6 +585,75 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check('PDF 編輯：記住超過限制時的處理方式', await page.evaluate(() => PE.overMode === 'compress'));
     check('PDF 編輯：超過限制的頁面醒目標示', !!(await page.$('.pe-card >> nth=3 >> .pe-csz.over')) && !!(await page.$('#peSize .pe-szp.over')));
     pick = path.join(W, 'root');
+    await page.click('nav button:has-text("文件產出")'); await sleep(300);
+  }
+
+  // 5e. v2.5：自訂模板、其他文件、專技人員分設計／監造／裝置、文件產出新介面、PDF 編輯平移與刪除
+  {
+    // 自訂模板：匯入一般 Word，選取文字換成欄位
+    await page.click('nav button:has-text("模板與版本")'); await sleep(300);
+    let fc = page.waitForEvent('filechooser'); await page.click('#btnCustomTpl'); await (await fc).setFiles(path.join(W, 'pdf', 'custom.docx'));
+    await page.waitForSelector('.ctpl-pv section', { timeout: 15000 });
+    await page.evaluate(() => { const el = [...document.querySelectorAll('.ctpl-pv p')].find(p => p.textContent.includes('監造人證號')); const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); });
+    await page.dispatchEvent('.ctpl-pv', 'mouseup');
+    check('自訂模板：滑鼠選取的文字自動填入', (await page.inputValue('#ctplText')) === '監造人證號：消師證字第二號', await page.inputValue('#ctplText'));
+    const rep = async (txt, fld) => { await page.fill('#ctplText', txt); await page.selectOption('#ctplField', fld); await page.click('#ctplApply'); await page.waitForFunction(t => !document.querySelector('#ctplText').value, txt); await sleep(500); };
+    await rep('消師證字第二號', '監造人證書字號');   // 跨越兩段不同格式的文字
+    await rep('消師證字第一號', '證書字號');
+    await rep('臺中市測試路1號', '建築地址');
+    await page.fill('#ctplText', '不存在的文字'); await page.selectOption('#ctplField', '工程名稱'); await page.click('#ctplApply'); await sleep(300);
+    check('自訂模板：找不到文字會提醒', (await page.textContent('.toast >> nth=-1')).includes('找不到'));
+    { const mk = await page.$$eval('.ctpl-pv mark.ctpl-mk', a => a.map(x => x.textContent)); check('自訂模板：預覽標出已設定的欄位', mk.length === 4, JSON.stringify(mk)); }
+    await page.fill('#ctplName', '監造測試切結書');
+    await page.click('#ctplSave'); await page.waitForSelector('.modal .hd:has-text("自訂模板已儲存")', { timeout: 10000 });
+    await page.click('.modal .btn'); await sleep(300);
+    const tf = path.join(W, 'root', 'templates', '監造測試切結書_template.docx');
+    const tinfo = await page.evaluate(() => { const i = S.tplInfo['監造測試切結書_template.docx']; const d = S.settings.docs.find(d => d.name === '監造測試切結書'); return i && d && { f: Object.keys(i.fields).sort(), pool: d.pool, no: d.no }; });
+    check('自訂模板：存進 templates 並成為其他文件', fs.existsSync(tf) && tinfo && tinfo.pool && tinfo.no === -1 && tinfo.f.join() === '建築地址,監造人證書字號,證書字號', JSON.stringify(tinfo));
+
+    // 其他文件：在文件產出加入
+    await page.click('nav button:has-text("文件產出")'); await sleep(500);
+    check('文件產出：大按鈕與步驟列', (await page.$$('#main .bigbtn')).length >= 6 && (await page.$$('#stepper .stp')).length >= 3);
+    await page.click('#btnExtraDocs'); await page.waitForSelector('.modal .xdoc');
+    await page.click('.modal .xdoc:has-text("監造測試切結書")'); await page.click('.modal .btn.primary'); await sleep(800);
+    const xd = await page.evaluate(() => caseDocs().filter(x => x.extra).map(x => [x.doc.name, x.include]));
+    check('其他文件：加入後會產出', JSON.stringify(xd) === '[["監造測試切結書",true]]', JSON.stringify(xd));
+    check('其他文件：最後一步列出並可移除', (await page.$$('#main .card.final tr:has-text("監造測試切結書") button')).length === 1);
+
+    // 專技人員：監造人預設同設計人
+    await page.evaluate(() => { S.cs.values['證書字號'] = '設計證號A'; S.cs.proSame = {}; saveDraft(); render(); }); await sleep(500);
+    const same = await page.evaluate(() => ({ v: S.cs.values['監造人證書字號'], box: [...document.querySelectorAll('.grp .t label.chk')].some(x => x.textContent.includes('同設計人') && x.querySelector('input').checked) }));
+    check('專技人員：監造人預設同設計人並帶入資料', same.v === '設計證號A' && same.box, JSON.stringify(same));
+    const fill = async () => page.evaluate(async () => { const cd = caseDocs().find(x => x.doc.name === '監造測試切結書'); const b = await fillTemplate((await tplBuffer(cd.file)).slice(0), resolver(cd)); const z = await JSZip.loadAsync(b); return (await z.file('word/document.xml').async('string')).replace(/<[^>]+>/g, ''); });
+    let txt = await fill();
+    check('專技人員：同設計人時兩個證號相同', txt.includes('監造人證號：設計證號A') && txt.includes('設計人證號：設計證號A'), txt.slice(0, 120));
+    await page.evaluate(() => { const l = [...document.querySelectorAll('.grp .t label.chk')].find(x => x.textContent.includes('同設計人')); l.querySelector('input').click(); }); await sleep(500);
+    await page.fill('label.f[data-field="監造人證書字號"] input', '監造證號B'); await sleep(300);
+    await page.evaluate(() => { S.cs.values['證書字號'] = '設計證號C'; saveDraft(); });
+    txt = await fill();
+    check('專技人員：取消同設計人後可分開填寫', txt.includes('監造人證號：監造證號B') && txt.includes('設計人證號：設計證號C'), txt.slice(0, 120));
+    check('專技人員：欄位已登記在設定裡', await page.evaluate(() => ['監造人', '裝置人'].every(r => S.settings.groups.includes(r) && S.settings.fields.some(f => f.name === r + '證書字號'))));
+    await page.evaluate(() => { S.cs.extraDocs = []; S.cs.proSame = {}; saveDraft(); render(); });
+
+    // PDF 編輯：放大後可以捲到最左邊；只有一個刪除按鈕、只刪選取頁
+    await page.click('nav button:has-text("PDF 編輯")'); await sleep(300);
+    if (await page.isVisible('#peReset')) { await page.click('#peReset'); await sleep(200); if (await page.isVisible('.modal')) await page.click('.modal .btn.primary'); }
+    await page.waitForSelector('.pe-empty');
+    fc = page.waitForEvent('filechooser'); await page.click('.pe-empty button:has-text("選擇 PDF 檔")');
+    await (await fc).setFiles(path.join(W, 'pdf/A.pdf'));
+    await page.waitForFunction(() => PE.pages.length === 2);
+    check('PDF 編輯：來源檔沒有整份移除的 ×', (await page.$$('.pe-src button')).length === 0);
+    check('PDF 編輯：縮圖上沒有單頁刪除鈕', (await page.$$('.pe-card .pe-tools .del')).length === 0);
+    await page.click('.pe-card >> nth=1 >> .pe-chk');
+    await page.click('.pe-gbar button:has-text("刪除選取的 1 頁")'); await sleep(300);
+    check('PDF 編輯：只刪除打勾的那一頁', await page.evaluate(() => PE.pages.length === 1 && PE.pages[0].idx === 0));
+    await page.evaluate(() => { PE.mode = 'edit'; peRender(); }); await sleep(500);
+    for (let i = 0; i < 6; i++) { await page.evaluate(() => peZoom(1.4)); await sleep(100); }
+    const pan = await page.evaluate(() => { const sc = $('#peScroll'); sc.scrollLeft = 0; const pg = sc.querySelector('.pe-page'); return { pl: pg.getBoundingClientRect().left, sl: sc.getBoundingClientRect().left, sw: sc.scrollWidth, cw: sc.clientWidth }; });
+    check('PDF 編輯：放大後可以平移到頁面最左邊', pan.sw > pan.cw && pan.pl >= pan.sl, JSON.stringify(pan));
+    await page.evaluate(() => peZoom('fit')); await sleep(200);
+    const fitc = await page.evaluate(() => { const sc = $('#peScroll'), r = sc.getBoundingClientRect(), p = sc.querySelector('.pe-page').getBoundingClientRect(); return Math.abs((p.left - r.left) - (r.right - p.right)) < 30; });
+    check('PDF 編輯：沒放大時頁面仍置中', fitc);
     await page.click('nav button:has-text("文件產出")'); await sleep(300);
   }
 

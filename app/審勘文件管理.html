@@ -123,6 +123,110 @@ details summary{cursor:pointer;color:var(--sub);font-size:13px}
 .kbd{border:1px solid var(--line);border-radius:4px;padding:0 5px;background:var(--soft);font-size:13px}
 .updbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--warn-soft);border-bottom:1px solid var(--line);padding:8px 16px;font-size:14px}
 .updbar details{flex-basis:100%}.updbar pre{white-space:pre-wrap;margin:6px 0 0;font-family:inherit}
+/* ① 文件產出：長輩友善版（大字、大按鈕、圖示、填好打勾） */
+.gen-main{font-size:17px}
+.gen-main h2{font-size:24px}
+.gen-main .lead{font-size:16px;color:#3d4450}
+.gen-main .lead mark,.gen-main .lead .pvval{padding:0 4px;border-radius:3px}
+.gen-main .card{border-radius:12px;padding:18px 20px}
+.gen-main.fresh .card{animation:fadeup .3s ease-out both}
+.gen-main.fresh .card:nth-child(3){animation-delay:.05s}.gen-main.fresh .card:nth-child(4){animation-delay:.1s}.gen-main.fresh .card:nth-child(5){animation-delay:.15s}
+.gen-main .card h3{font-size:20px;gap:10px}
+.gen-main .card h3 .n{width:34px;height:34px;font-size:18px;flex:none}
+.gen-main .card h3 .si{font-size:22px}
+.gen-main .card.step{border-left:6px solid var(--line);transition:border-color .2s,box-shadow .2s}
+.gen-main .card.step.active{border-left-color:var(--brand);box-shadow:0 4px 18px rgba(180,35,42,.12)}
+.gen-main .card.step.done{border-left-color:var(--ok)}
+.gen-main .card.step.done.active{border-left-color:var(--ok);box-shadow:0 4px 18px rgba(26,127,55,.14)}
+.gen-main .card.step.done h3 .n{background:var(--ok)}
+.sdone{margin-left:auto;font-size:14px;font-weight:700;padding:3px 12px;border-radius:14px;background:var(--warn-soft);color:var(--warn);white-space:nowrap}
+.sdone.on{background:var(--ok-soft);color:var(--ok);animation:pop .35s ease-out}
+.gen-main .hint{font-size:15px;color:#3d4450;margin:-4px 0 12px;background:var(--soft);padding:8px 12px;border-radius:8px}
+.gen-main label.f{font-size:15px;color:#3d4450;gap:4px}
+.gen-main label.f>span{font-weight:700}
+.gen-main input[type=text],.gen-main select{font-size:17px;padding:9px 11px;border-width:2px;border-radius:8px}
+.gen-main label.f.filled input,.gen-main label.f.filled select{border-color:#9fd3ad;background:#f6fcf7}
+.gen-main .grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px 18px}
+.gen-main .grp{background:#fff;border:1px solid #e6e9ee;border-radius:10px;padding:12px 14px}
+.gen-main .grp>.t{font-size:16px;color:var(--ink);flex-wrap:wrap}
+.gen-main .grp>.t select{font-size:14px !important;padding:4px 8px !important}
+.gen-main .chk{font-size:16px;padding:6px 14px;border-width:2px;border-radius:20px;transition:background .15s,border-color .15s,transform .1s}
+.gen-main .chk:active{transform:scale(.96)}
+.gen-main .chk input{width:18px;height:18px}
+.gen-main .chk.on{border-color:var(--brand);font-weight:700}
+.gen-main .btn{font-size:15px;padding:7px 15px;border-radius:8px}
+.gen-main .btn.small{font-size:14px;padding:4px 11px}
+.gen-main table{font-size:15px}
+.gen-main tr.off td{opacity:.5}
+.gen-main .okmark{color:var(--ok);font-weight:700;font-size:18px}
+.gen-main .bigchk{width:20px;height:20px;accent-color:var(--brand)}
+.gen-main .editbar{font-size:16px;border-radius:12px;padding:12px 16px}
+.gen-main .editbar .eb-i{font-size:24px}
+.genbar{display:flex;flex-direction:column;gap:12px}
+.gencat{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.gencat .gc-l{font-weight:700;font-size:17px}
+.gencat select{min-width:220px;font-weight:700}
+.bigbtns{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.bigbtn{display:flex;align-items:center;gap:10px;text-align:left;border:2px solid var(--line);background:#fff;border-radius:12px;padding:10px 12px;cursor:pointer;transition:transform .15s,box-shadow .15s,border-color .15s;min-height:62px}
+.bigbtn:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.1);border-color:#c9ced6}
+.bigbtn:active{transform:translateY(0) scale(.98)}
+.bigbtn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+.bigbtn .bi{font-size:28px;line-height:1;flex:none;transition:transform .2s}
+.bigbtn:hover .bi{transform:scale(1.15) rotate(-6deg)}
+.bigbtn .bt{display:flex;flex-direction:column;min-width:0}
+.bigbtn b{font-size:17px}
+.bigbtn small{font-size:13px;color:var(--sub);line-height:1.3}
+.bigbtn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.bigbtn.primary small{color:#ffe3e4}
+.bigbtn.warnbtn:hover{border-color:#f0b4b8}
+.bigbtn.huge{min-height:76px;padding:12px 22px}
+.bigbtn.huge .bi{font-size:36px}
+.bigbtn.huge b{font-size:21px}
+.bigbtn.ready{animation:glow 2.2s ease-in-out infinite}
+.stepper{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px;position:sticky;top:-20px;z-index:3;background:var(--bg);padding:8px 0}
+.stp{display:flex;align-items:center;gap:6px;border:2px solid var(--line);background:#fff;border-radius:20px;padding:4px 12px 4px 4px;cursor:pointer;font-size:15px;transition:background .15s,border-color .15s}
+.stp:hover{border-color:#c9ced6;background:var(--soft)}
+.stp .sn{display:inline-flex;width:26px;height:26px;border-radius:50%;background:#c9ced6;color:#fff;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.stp.done{border-color:#9fd3ad}
+.stp.done .sn{background:var(--ok);animation:pop .35s ease-out}
+.stp .sl{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.genflow{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:14px 0 10px;font-size:15px;color:#3d4450;background:var(--soft);border-radius:10px;padding:10px 14px}
+.genflow .ar{color:var(--brand);font-weight:700;animation:nudge 1.6s ease-in-out infinite}
+.genact{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:12px}
+.gen-main .pvhead{padding:12px 14px 0}
+.gen-main .pvtitle{font-size:15px}
+.gen-main .pvtabs button{font-size:14px}
+@keyframes fadeup{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes pop{0%{transform:scale(.6)}70%{transform:scale(1.15)}100%{transform:scale(1)}}
+@keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(180,35,42,.35)}50%{box-shadow:0 0 0 8px rgba(180,35,42,0)}}
+@keyframes nudge{0%,100%{transform:translateX(0)}50%{transform:translateX(4px)}}
+@media (prefers-reduced-motion:reduce){.gen-main *,.ctpl,.xdoc{animation:none !important;transition:none !important}}
+/* 其他文件、自訂模板 */
+.xdocs{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
+.xdoc{display:flex;align-items:center;gap:10px;border:2px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;background:#fff;font-size:16px;transition:border-color .15s,background .15s,transform .15s}
+.xdoc:hover{transform:translateY(-1px);border-color:#e7b3b6}
+.xdoc.on{border-color:var(--brand);background:var(--brand-soft)}
+.xdoc input{width:20px;height:20px;accent-color:var(--brand)}
+.xdoc .xi{font-size:22px}
+.xdoc>span:last-child{display:flex;flex-direction:column}
+.ctpl-ov{align-items:stretch;justify-content:stretch;padding:24px}
+.ctpl{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 380px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);animation:popin .2s ease-out}
+.ctpl-pv{background:#8a8f96;overflow:auto;padding:12px;user-select:text;cursor:text}
+.ctpl-pv .docx-wrapper{background:transparent !important;padding:0 !important}
+.ctpl-side{overflow:auto;padding:18px 18px 0;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:6px;font-size:16px}
+.ctpl-title{font-size:18px;font-weight:700;margin-bottom:4px;word-break:break-all}
+.ctpl-step{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.ctpl-step p{margin:4px 0}
+.ctpl-h{display:flex;align-items:center;gap:8px;font-weight:700;margin-bottom:6px}
+.ctpl-h .n{display:inline-flex;width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;align-items:center;justify-content:center;font-size:15px;flex:none}
+.ctpl-done{margin:6px 0;padding-left:18px;font-size:14px}
+.ctpl-done .from{background:#fff3c4}
+.ctpl-ft{position:sticky;bottom:0;background:#fff;padding:12px 0 16px;justify-content:space-between;border-top:1px solid var(--line);margin-top:auto}
+mark.ctpl-mk{background:#c6f0cf;color:#105d24;border-radius:3px;padding:0 2px}
+input.flash{animation:flash .6s}
+@keyframes flash{0%{background:#fff3c4}100%{background:#fff}}
+@keyframes popin{from{transform:scale(.97);opacity:0}to{transform:none;opacity:1}}
+.btn.big{font-size:17px;padding:9px 20px}
 /* PE-CSS-START */
 /* ===== ④ PDF 編輯 ===== */
 main.pe-main{padding:0;overflow:hidden;display:flex;flex-direction:column}
@@ -192,7 +296,7 @@ main.pe-main{padding:0;overflow:hidden;display:flex;flex-direction:column}
 .pe-tb select{padding:3px 6px;font-size:14px}
 .pe-tb .lbl{font-size:12px;color:var(--sub);margin-right:2px}
 .pe-zoom{font-size:13px;color:var(--sub);min-width:44px;text-align:center}
-.pe-pages{display:flex;flex-direction:column;align-items:center;gap:24px;padding:24px 20px 120px}
+.pe-pages{display:flex;flex-direction:column;align-items:center;gap:24px;padding:24px 20px 120px;width:max-content;min-width:100%;box-sizing:border-box}
 .pe-page{position:relative;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.15),0 6px 20px rgba(0,0,0,.08);flex:none}
 .pe-page canvas{position:absolute;inset:0;width:100%;height:100%}
 .pe-page .pno{position:absolute;left:-2px;top:-20px;font-size:12px;color:var(--sub)}
@@ -323,7 +427,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const SETTINGS_FILE = '系統設定.json';
 const CASE_FILE = '案件資料.json';
-const APP_VERSION = '2.4';
+const APP_VERSION = '2.5';
 const TPL_DIR = 'templates';
 const BAD_CHARS = /[\\/:*?"<>|]/;
 const $ = s => document.querySelector(s);
@@ -749,16 +853,42 @@ function migrateSettings(st) {
     if (!st.fields.some(x => x.name === '其他事項內容')) st.fields.splice(st.fields.findIndex(x => x.name === '其他類別名稱') + 1, 0, { name: '其他事項內容', group: '案件資料', required: false, options: [] });
     st.options.schema = 3; changed = true;
   }
+  if (st.options.schema < 4) {   // 專技人員分成設計人（原欄位）、監造人、裝置人
+    const at = st.groups.indexOf('專技人員');
+    for (const [i, role] of PRO_ROLES.entries()) if (!st.groups.includes(role)) st.groups.splice(at >= 0 ? at + 1 + i : st.groups.length, 0, role);
+    const kind = st.fields.find(x => x.name === '專技類別');
+    for (const role of PRO_ROLES) {
+      let pos = st.fields.map(x => x.group).lastIndexOf(PRO_ROLES.indexOf(role) ? PRO_ROLES[0] : '專技人員') + 1 || st.fields.length;
+      for (const [b, d] of Object.entries(proMap(role))) if (!st.fields.some(x => x.name === d)) {
+        const bf = st.fields.find(x => x.name === b);
+        st.fields.splice(pos++, 0, { name: d, group: role, required: bf ? bf.required : true, options: b === '專技類別' && kind ? [...kind.options] : [] });
+      }
+    }
+    st.options.schema = 4; changed = true;
+  }
   return changed;
 }
+/* ---------- 專技人員：設計人＝原本的 {專技人員姓名} 等欄位；監造人、裝置人預設「同設計人」 ---------- */
+const PRO_ROLES = ['監造人', '裝置人'];
+const PRO_BASE = ['專技人員姓名', '專技類別', '證書字號', '受託人電話', '執業機構名稱', '執業機構統編', '執業機構地址'];
+const PRO_SUFFIX = ['姓名', '類別', '證書字號', '電話', '執業機構名稱', '執業機構統編', '執業機構地址'];
+function proMap(role) { return Object.fromEntries(PRO_BASE.map((b, i) => [b, role + PRO_SUFFIX[i]])); }
+function proSame(cs, role) { return !(cs.proSame && cs.proSame[role] === false); }
+function syncPros(cs) {   // 勾「同設計人」時，把設計人的資料複製到監造人／裝置人的欄位
+  if (!cs || !cs.values) return;
+  for (const role of PRO_ROLES) if (proSame(cs, role)) for (const [b, d] of Object.entries(proMap(role))) {
+    if (cs.values[b] != null || cs.values[d] != null) cs.values[d] = cs.values[b] ?? '';
+  }
+}
+const PRO_LABEL = { '專技人員': '設計人（專技人員）', '監造人': '監造人', '裝置人': '裝置人' };
 function defaultSettings() {
   const F = (name, group, required = true, options) => ({ name, group, required, options: options || [] });
   return {
     app: '消防審勘文件管理', version: 1, rev: 0, savedAt: null, savedBy: '',
-    options: { padDate: true, schema: 3 },
+    options: { padDate: true, schema: 4 },
     checkInputs: [{ check: '其他', field: '其他類別名稱' }, { check: '其他事項', field: '其他事項內容' }],
     roles: ['業主', '建築師'],
-    groups: ['案件資料', '業主', '專技人員', '建築師', '日期'],
+    groups: ['案件資料', '業主', '專技人員', '監造人', '裝置人', '建築師', '日期'],
     profileGroups: ['業主', '專技人員', '建築師'],
     fields: [
       F('工程名稱', '案件資料'), F('建築地址', '案件資料'), F('建築地號', '案件資料'), F('建使照字號', '案件資料'),
@@ -766,6 +896,7 @@ function defaultSettings() {
       F('管理權人機構', '業主'), F('管理權人負責人', '業主'), F('管理權人電話', '業主'), F('管理權人通訊處', '業主'),
       F('專技人員姓名', '專技人員'), F('專技類別', '專技人員', true, ['消防設備師', '消防設備士']), F('證書字號', '專技人員'),
       F('受託人電話', '專技人員'), F('執業機構名稱', '專技人員'), F('執業機構統編', '專技人員'), F('執業機構地址', '專技人員'),
+      ...['監造人', '裝置人'].flatMap(r => ['姓名', '類別', '證書字號', '電話', '執業機構名稱', '執業機構統編', '執業機構地址'].map(x => F(r + x, r, true, x === '類別' ? ['消防設備師', '消防設備士'] : []))),
       F('建築師事務所', '建築師'), F('建築師開業證號', '建築師'), F('建築師姓名', '建築師'), F('建築師事務所電話', '建築師'), F('建築師事務所地址', '建築師'),
       F('年份', '日期'), F('月份', '日期'), F('日份', '日期')
     ],
@@ -801,7 +932,7 @@ const S = {
   scan: { caseInfo: null, dir: null, files: [], assign: {}, sel: null, url: null, delSrc: false }
 };
 function blankCase() {
-  return { category: '', abbr: '', docChoices: {}, cl: {}, checks: {}, pairs: {}, edits: {}, values: { ...rocToday() } };
+  return { category: '', abbr: '', docChoices: {}, cl: {}, checks: {}, pairs: {}, edits: {}, extraDocs: [], proSame: {}, values: { ...rocToday() } };
 }
 
 /* ==================== 設定檔讀寫（多人共用防覆蓋） ==================== */
@@ -962,17 +1093,19 @@ function render() {
   }
   const main = $('#main'); const y = main.scrollTop; main.innerHTML = '';
   main.classList.toggle('pe-main', S.tab === 'pdf');
+  main.classList.remove('gen-main'); main.classList.toggle('fresh', S.lastTab !== S.tab); S.lastTab = S.tab;
   ({ pdf: viewPdf, gen: viewGen, scan: viewScan, cases: viewCases, cats: viewCats, docs: viewDocs, tpls: viewTpls, profiles: viewProfiles, fields: viewFields, help: viewHelp })[S.tab](main);
   main.scrollTop = y;
 }
 
 /* ==================== ① 文件產出 ==================== */
-function saveDraft() { ls.set('draftCase', S.cs); if (S.tab === 'gen') schedulePreview(); }
+function saveDraft() { syncPros(S.cs); ls.set('draftCase', S.cs); if (S.tab === 'gen') schedulePreview(); }
 function resetChecklist(cat) { S.cs.cl = {}; for (const n of cat.needed || []) S.cs.cl[n] = '有'; }
 function normalizeCase(c) { // 舊格式轉換
   if (!c.cl) { c.cl = {}; for (const n of c.needed || []) c.cl[n] = '有'; }
   delete c.needed; c.pairs = c.pairs || {}; c.checks = c.checks || {}; c.edits = c.edits || {};
   if (c.checks['用途其他']) { c.checks['其他事項'] = true; delete c.checks['用途其他']; }
+  c.proSame = c.proSame || {}; c.extraDocs = c.extraDocs || []; syncPros(c);
   return c;
 }
 function selectCategory(id, silent) {
@@ -1006,13 +1139,35 @@ function caseDocs() {
   const cat = catById(S.cs.category); if (!cat) return [];
   const clNos = new Set(checklistItems(cat).map(i => i.no));
   const key = d => d.no < 0 ? 1e4 : d.no;
-  return cat.docIds.map(docById).filter(Boolean).map(d => {
+  const extra = (S.cs.extraDocs || []).filter(id => !cat.docIds.includes(id));
+  return [...cat.docIds, ...extra].map(docById).filter(Boolean).map(d => {
+    const isExtra = extra.includes(d.id);
     const ch = S.cs.docChoices[d.id] || { include: true, tpl: 0 };
     const t = d.templates[ch.tpl] || d.templates[0];
-    const byCl = !d.checklist && d.no > 0 && clNos.has(d.no);
-    return { doc: d, byCl, include: byCl ? clState(d.no) !== '不須' : ch.include !== false, tplIndex: ch.tpl || 0, file: t?.file, info: t && S.tplInfo[t.file] };
+    const byCl = !isExtra && !d.checklist && d.no > 0 && clNos.has(d.no);
+    return { doc: d, byCl, extra: isExtra, include: isExtra ? true : byCl ? clState(d.no) !== '不須' : ch.include !== false, tplIndex: ch.tpl || 0, file: t?.file, info: t && S.tplInfo[t.file] };
   }).sort((a, b) => key(a.doc) - key(b.doc));
 }
+/* 其他文件：文件設定裡勾「其他文件」的文件，產出時可以隨時加入這個案件 */
+async function pickExtraDocs() {
+  const cs = S.cs, cat = catById(cs.category);
+  if (!cat) { toast('請先選擇案件類別'); return; }
+  const inCat = new Set(cat.docIds);
+  const pool = S.settings.docs.filter(d => d.pool && !inCat.has(d.id));
+  const others = S.settings.docs.filter(d => !d.pool && !d.checklist && !inCat.has(d.id));
+  const sel = new Set(cs.extraDocs || []);
+  const item = d => h('label', { class: 'xdoc' + (sel.has(d.id) ? ' on' : '') },
+    h('input', { type: 'checkbox', checked: sel.has(d.id), onchange: e => { e.target.checked ? sel.add(d.id) : sel.delete(d.id); e.target.parentNode.classList.toggle('on', e.target.checked); } }),
+    h('span', { class: 'xi' }, '📄'), h('span', {}, h('b', {}, d.name), h('span', { class: 'muted' }, d.no >= 0 ? `　項次 ${d.no}` : '　不編號')));
+  const body = h('div', {},
+    h('p', {}, '打勾＝加入這次要產出的文件。產出時會和其他文件一起存到案件資料夾。'),
+    pool.length ? h('div', { class: 'xdocs' }, pool.map(item)) : h('p', { class: 'muted' }, '其他文件資料庫還是空的。到「系統設定 › 文件設定」把文件的「其他文件」打勾，或到「模板與版本」用「自訂模板」匯入新的 Word。'),
+    others.length ? h('details', { style: 'margin-top:12px' }, h('summary', {}, `其他類別用到的文件（${others.length}）`), h('div', { class: 'xdocs' }, others.map(item))) : null);
+  if (!await modal('加入其他文件', body, [{ label: '取消', value: false }, { label: '✔ 確定', value: true, primary: true }])) return;
+  cs.extraDocs = [...sel]; saveDraft(); render();
+  toast(sel.size ? `這個案件加入了 ${sel.size} 份其他文件` : '沒有加入其他文件');
+}
+function removeExtraDoc(id) { S.cs.extraDocs = (S.cs.extraDocs || []).filter(x => x !== id); saveDraft(); render(); }
 function caseMarkers() {
   const fields = new Set(), checks = new Set();
   for (const cd of caseDocs()) if (cd.include && cd.info) {
@@ -1025,6 +1180,7 @@ const noLabel = no => no < 0 ? '' : pad2(no);   // 項次為負數＝檔名不�
 const fileName = (no, abbr, name, ext) => `${noLabel(no)}${abbr}-${name}${ext}`;
 
 function validateCase() {
+  syncPros(S.cs);
   const out = [], cs = S.cs, cat = catById(cs.category);
   const E = t => out.push({ type: 'err', text: t }), Wn = t => out.push({ type: 'warn', text: t });
   if (!cat) { E('請先選擇案件類別。'); return out; }
@@ -1038,7 +1194,7 @@ function validateCase() {
     if (!S.tplInfo[cd.file]) E(`找不到「${cd.doc.name}」的模板檔：${cd.file}（請確認 templates 資料夾）`);
     else for (const e of S.tplInfo[cd.file].errors) E(`模板「${cd.file}」有錯誤：${e}`);
     if (cd.info && cd.info.generic && !cd.doc.checklist) E(`「${cd.doc.name}」模板中有未命名的勾選框 {□}，只有資料檢查表可以這樣用，請改成 {□名稱}。`);
-    if (seen[cd.doc.no]) E(`項次 ${cd.doc.no} 同時對應「${seen[cd.doc.no]}」和「${cd.doc.name}」，檔名會重複。`);
+    if (cd.doc.no >= 0 && seen[cd.doc.no]) E(`項次 ${cd.doc.no} 同時對應「${seen[cd.doc.no]}」和「${cd.doc.name}」，檔名會重複。`);
     seen[cd.doc.no] = cd.doc.name;
     if (BAD_CHARS.test(cd.doc.name)) E(`文件名稱「${cd.doc.name}」含有檔名不能用的符號。`);
   }
@@ -1119,7 +1275,19 @@ function fieldBlock(fields) {
   for (const grp of [...S.settings.groups, '未登記欄位']) {
     const list = grp === '未登記欄位' ? fields.filter(k => !fdef[k]) : S.settings.fields.filter(f => f.group === grp && fields.includes(f.name)).map(f => f.name);
     if (!list.length) continue;
-    const head = h('div', { class: 't' }, grp);
+    const isRole = PRO_ROLES.includes(grp), same = isRole && proSame(cs, grp);
+    const head = h('div', { class: 't' }, PRO_LABEL[grp] || grp);
+    if (isRole) {
+      const base = proMap(grp), back = Object.fromEntries(Object.entries(base).map(([b, d]) => [d, b]));
+      head.append(h('label', { class: 'chk' + (same ? ' on' : ''), title: '打勾＝和設計人是同一位，資料自動帶入' },
+        h('input', { type: 'checkbox', checked: same, onchange: e => { cs.proSame = cs.proSame || {}; cs.proSame[grp] = e.target.checked; saveDraft(); render(); } }), '同設計人'));
+      if (!same) {
+        const profs = S.settings.profiles['專技人員'] || [];
+        head.append(h('select', { style: 'font-size:13px;padding:2px 6px', onchange: e => { const p = profs.find(x => x.id === e.target.value); if (p) { for (const [k, v] of Object.entries(p.values)) if (base[k]) cs.values[base[k]] = v; saveDraft(); render(); } } },
+          h('option', { value: '' }, profs.length ? `從常用資料帶入（${profs.length}）` : '（尚無常用資料）'), profs.map(p => h('option', { value: p.id }, p.label))));
+        head.append(h('button', { class: 'btn small', onclick: () => saveAsProfile('專技人員', back) }, '存為常用資料'));
+      }
+    }
     if (S.settings.profileGroups.includes(grp)) {
       const profs = S.settings.profiles[grp] || [];
       head.append(h('select', { style: 'font-size:13px;padding:2px 6px', onchange: e => { const p = profs.find(x => x.id === e.target.value); if (p) { Object.assign(cs.values, p.values); saveDraft(); render(); } } },
@@ -1128,16 +1296,24 @@ function fieldBlock(fields) {
     }
     if (grp === '日期') head.append(h('button', { class: 'btn small', onclick: () => { Object.assign(cs.values, rocToday()); saveDraft(); render(); } }, '帶入今天'));
     if (grp === '未登記欄位') head.append(h('span', { class: 'tag warn' }, '模板中有，但「欄位與勾選框」裡沒有登記，請確認不是打錯字'));
+    if (same) {
+      const who = cs.values['專技人員姓名'] || cs.values['執業機構名稱'] || '';
+      wrap.append(h('div', { class: 'grp' }, head, h('div', { class: 'muted', style: 'padding:2px 4px 6px' }, who ? `資料和設計人相同（${who}）。不同人時，把「同設計人」的勾拿掉再填。` : '資料和設計人相同。不同人時，把「同設計人」的勾拿掉再填。')));
+      continue;
+    }
     const gg = h('div', { class: 'grid' });
     for (const name of list) {
       const def = fdef[name] || { required: true, options: [] };
-      const onIn = e => { cs.values[name] = e.target.value; saveDraft(); };
+      const onIn = e => { cs.values[name] = e.target.value; e.target.closest('label.f').classList.toggle('filled', !!String(e.target.value).trim()); saveDraft(); refreshStepMarks(); };
       const input = def.options && def.options.length
         ? h('select', { onchange: onIn }, h('option', { value: '' }, '— 請選擇 —'), def.options.map(o => h('option', { value: o, selected: cs.values[name] === o }, o)))
         : h('input', { type: 'text', value: cs.values[name] ?? '', oninput: onIn });
-      gg.append(h('label', { class: 'f' }, h('span', {}, name, def.required ? h('span', { class: 'req' }, ' *') : null), input));
+      const shown = isRole && name.startsWith(grp) ? name.slice(grp.length) : name;
+      gg.append(h('label', { class: 'f' + (String(cs.values[name] ?? '').trim() ? ' filled' : ''), title: name, 'data-field': name }, h('span', {}, shown, def.required ? h('span', { class: 'req' }, ' *') : null), input));
     }
-    wrap.append(h('div', { class: 'grp' }, head, gg));
+    const note = grp === '專技人員' && !PRO_ROLES.some(r => Object.values(proMap(r)).some(k => caseMarkers().fields.has(k)))
+      ? h('div', { class: 'muted', style: 'font-size:13px;margin-top:4px' }, '監造人、裝置人目前和設計人共用這組資料。要分開填寫時，在 Word 模板的監造、裝置欄位改用 {監造人證書字號}、{裝置人姓名} 這類標記。') : null;
+    wrap.append(h('div', { class: 'grp' }, head, gg, note));
   }
   return wrap;
 }
@@ -1190,31 +1366,54 @@ function checklistTable(items) {
       h('tr', {}, h('th', { style: 'width:44px' }, '有'), h('th', { style: 'width:44px' }, '無'))), tb);
 }
 
+/* 長輩友善的大按鈕：圖示＋標題＋一句「按了會怎樣」 */
+function bigBtn(icon, title, sub, onclick, o = {}) {
+  return h('button', { class: 'bigbtn' + (o.cls ? ' ' + o.cls : ''), id: o.id, title: o.title || sub, onclick, disabled: o.disabled },
+    h('span', { class: 'bi' }, icon), h('span', { class: 'bt' }, h('b', {}, title), sub ? h('small', {}, sub) : null));
+}
+function stepDone(fields) {   // 這一步的必填欄位都填了沒
+  const fdef = Object.fromEntries(S.settings.fields.map(f => [f.name, f])), ci = new Set(Object.values(checkInputMap()));
+  return fields.every(k => ci.has(k) || !(fdef[k] ? fdef[k].required : true) || String(S.cs.values[k] ?? '').trim());
+}
 function viewGen(main) {
   const cs = S.cs;
   if (!catById(cs.category) && S.settings.categories[0]) selectCategory(S.settings.categories[0].id);
   const cat = catById(cs.category);
-  main.append(h('h2', {}, '文件產出'), h('p', { class: 'lead' }, '依序填寫各步驟，右側會即時顯示目前步驟的文件內容（黃底＝還沒填的欄位，藍字＝已帶入的資料）。'));
-  const left = h('div', {}), right = h('div', { class: 'pvpane', id: 'pvpane' });
+  main.classList.add('gen-main');
+  main.append(h('div', { class: 'genhead' }, h('h2', {}, '📝 文件產出'),
+    h('p', { class: 'lead' }, '照著 1、2、3… 往下填，右邊會即時顯示文件的樣子（', h('mark', { class: 'pvmiss' }, '黃色'), '＝還沒填，', h('span', { class: 'pvval' }, '藍字'), '＝已填好）。')));
+  const left = h('div', { class: 'genleft' }), right = h('div', { class: 'pvpane', id: 'pvpane' });
   main.append(h('div', { class: 'genwrap' }, left, right));
   const ed = S.editing;
   if (ed) left.append(h('div', { class: 'editbar' },
+    h('span', { class: 'eb-i' }, '✏️'),
     h('span', {}, '正在修正：', h('b', {}, ed.abbr || '（未命名）'), h('span', { class: 'muted' }, `（${ed.folder || ''}，上次產出 ${ed.at ? rocStamp(ed.at) : ''}）`)),
-    h('span', { class: 'muted' }, '改好後按最後一步的「重新產出」，會存回原本的資料夾。'),
+    h('span', { class: 'muted' }, '改好後按最下面的「重新產出」，會存回原本的資料夾。'),
     h('button', { class: 'btn small', onclick: async () => {
       if (!await confirmBox('改為新案件', '保留目前填好的資料，但當成一個<b>新案件</b>，產出時會請你選擇新的案件資料夾。<br>原本的案件不受影響。', '改為新案件')) return;
       endEditing(); delete S.cs.caseId; saveDraft(); render(); } }, '改為新案件（保留資料）')));
   if (!ed && S.drafting) left.append(h('div', { class: 'editbar' },
+    h('span', { class: 'eb-i' }, '📌'),
     h('span', {}, '草稿：', h('b', {}, cs.abbr || cs.values['工程名稱'] || '（未命名）'), h('span', { class: 'muted' }, '（還沒產出文件）')),
-    h('span', { class: 'muted' }, '資料填齊後按最後一步的「產出文件」；中途可以隨時按「存檔」。')));
-  left.append(h('div', { class: 'card' }, h('div', { class: 'row' },
-    h('button', { class: 'btn primary', title: '資料還不齊也可以先存，之後到「我的案件」繼續', onclick: saveCaseDraft }, '存檔'),
-    h('button', { class: 'btn', onclick: () => { S.tab = 'cases'; render(); } }, '我的案件…'),
-    h('button', { class: 'btn', onclick: loadOldCase }, '從資料夾載入'),
-    h('button', { class: 'btn', onclick: async () => { if (await confirmBox('清空表單', '確定要清空目前填寫的資料，開始新案件嗎？' + (S.editing ? '<br>（已產出的案件不受影響，之後可從「我的案件」再打開。）' : ''))) { const c = cs.category; endEditing(); S.cs = blankCase(); if (c) selectCategory(c); saveDraft(); render(); } } }, '新案件（清空）'),
-    h('label', { class: 'row', style: 'gap:6px;margin-left:auto' }, h('span', { class: 'muted' }, '案件類別'), categoryPicker(cat)))));
-  const pvSteps = [];
-  const addCard = (card, title, docs) => { card.dataset.step = pvSteps.length; pvSteps.push({ title, docs }); card.addEventListener('focusin', () => setPvStep(+card.dataset.step)); card.addEventListener('click', () => setPvStep(+card.dataset.step)); left.append(card); };
+    h('span', { class: 'muted' }, '資料填齊後按最下面的「產出文件」；中途可以隨時按「存檔」。')));
+  const extraN = caseDocs().filter(x => x.extra).length;
+  left.append(h('div', { class: 'card genbar' },
+    h('div', { class: 'gencat' }, h('span', { class: 'gc-l' }, '📂 案件類別'), categoryPicker(cat)),
+    h('div', { class: 'bigbtns' },
+      bigBtn('💾', '存檔', '先存起來，之後到「③ 我的案件」繼續', saveCaseDraft, { cls: 'primary', title: '資料還不齊也可以先存，之後到「我的案件」繼續' }),
+      bigBtn('📚', '我的案件', '打開以前做過的案件', () => { S.tab = 'cases'; render(); }),
+      bigBtn('➕', extraN ? `其他文件（${extraN}）` : '加入其他文件', '這次多產出一份資料庫裡的文件', pickExtraDocs, { id: 'btnExtraDocs' }),
+      bigBtn('📥', '從資料夾載入', '讀取案件資料夾裡的案件資料', loadOldCase),
+      bigBtn('🆕', '新案件', '清空表單，重新開始', async () => { if (await confirmBox('清空表單', '確定要清空目前填寫的資料，開始新案件嗎？' + (S.editing ? '<br>（已產出的案件不受影響，之後可從「我的案件」再打開。）' : ''))) { const c = cs.category; endEditing(); S.cs = blankCase(); if (c) selectCategory(c); saveDraft(); render(); } }, { cls: 'warnbtn' }))));
+  const stepper = h('div', { class: 'stepper', id: 'stepper' });
+  left.append(stepper);
+  const pvSteps = [], stepInfo = [];
+  const addCard = (card, title, docs, done) => {
+    card.dataset.step = pvSteps.length; card.id = 'step-' + pvSteps.length; pvSteps.push({ title, docs }); stepInfo.push({ title, done });
+    if (done) card.classList.add('done');
+    card.addEventListener('focusin', () => setPvStep(+card.dataset.step)); card.addEventListener('click', () => setPvStep(+card.dataset.step)); left.append(card);
+  };
+  const head = (n, title, done, icon) => h('h3', {}, stepNo(n), icon ? h('span', { class: 'si' }, icon) : null, title, h('span', { class: 'sdone' + (done ? ' on' : ''), title: done ? '這一步的必填資料都填好了' : '還有必填資料沒填' }, done ? '✔ 填好了' : '待填'));
   let n = 0;
   if (cat) {
     const dateGroup = new Set(S.settings.fields.filter(f => f.group === '日期').map(f => f.name));
@@ -1222,64 +1421,86 @@ function viewGen(main) {
     const clCard = () => {
       if (!items.length || !cld) return;
       n++;
-      const card = h('div', { class: 'card step' }, h('h3', {}, stepNo(n), '資料檢查表'),
-        h('p', { class: 'muted', style: 'margin-top:-6px' }, '直接點選表格中的格子：需要且有附＝「有」，需要但未附＝「無」，不需要＝「不須」。勾「不須」的文件不會產出，後面的步驟也不會要求填它的欄位。'),
+      const card = h('div', { class: 'card step' }, head(n, '資料檢查表', true, '☑️'),
+        h('p', { class: 'hint' }, '👆 點表格的格子：', h('b', {}, '有'), '＝要附而且有附，', h('b', {}, '無'), '＝要附但沒有，', h('b', {}, '不須'), '＝不用附（這份文件就不會產出）。'),
         checklistTable(items),
-        h('div', { class: 'row', style: 'margin-top:8px' }, h('button', { class: 'btn small', onclick: () => { resetChecklist(cat); saveDraft(); render(); } }, '恢復類別預設')));
-      // 依資料檢查表增減內容的文件（例如圖審所需文件），在這一步一起預覽
+        h('div', { class: 'row', style: 'margin-top:8px' }, h('button', { class: 'btn small', onclick: () => { resetChecklist(cat); saveDraft(); render(); } }, '↺ 恢復類別預設')));
       const inSteps = new Set((cat.steps || []).flatMap(x => x.docIds));
       const condDocs = caseDocs().filter(x => x.include && !x.doc.checklist && x.info && !inSteps.has(x.doc.id) && Object.keys(x.info.condCl || {}).length);
-      addCard(card, '資料檢查表', [cld, ...condDocs]);
+      addCard(card, '資料檢查表', [cld, ...condDocs], true);
     };
     const steps = caseSteps();
     steps.forEach((st, si) => {
       n++;
-      const card = h('div', { class: 'card step' }, h('h3', {}, stepNo(n), st.title),
-        h('p', { class: 'muted', style: 'margin-top:-6px' }, '對應文件：' + st.docs.map(cd => cd.doc.name).join('、') + (st.fields.length || st.checks.length ? '' : '（資料都已在前面的步驟填過）')));
+      const done = stepDone(st.fields);
+      const card = h('div', { class: 'card step' }, head(n, st.title, done, st.extra ? '➕' : null),
+        h('p', { class: 'hint' }, '📄 會用在：' + st.docs.map(cd => cd.doc.name).join('、') + (st.fields.length || st.checks.length ? '' : '（資料都已在前面的步驟填過，這一步不用再填）')));
       const dates = st.fields.filter(f => dateGroup.has(f)), rest = st.fields.filter(f => !dateGroup.has(f));
       if (dates.length) card.append(fieldBlock(dates));
       if (st.checks.length) card.append(checkBlock(st.checks));
       if (rest.length) card.append(fieldBlock(rest));
-      addCard(card, st.title, st.docs);
+      addCard(card, st.title, st.docs, done);
       if (si === 0) clCard();   // 資料檢查表排在第 2 步
     });
     if (!steps.length) clCard();
   }
   n++;
-  const c5 = h('div', { class: 'card step' }, h('h3', {}, stepNo(n), '確認案件類別與檔名'));
+  const msgs = cat ? validateCase() : [];
+  const ready = cat && !msgs.some(m => m.type === 'err');
+  const c5 = h('div', { class: 'card step final' }, head(n, '確認並產出文件', ready, '🚀'));
   const g = h('div', { class: 'grid' });
   g.append(h('label', { class: 'f' }, '案件類別', categoryPicker(cat)));
-  g.append(h('label', { class: 'f' }, h('span', {}, '工程名稱縮寫（用於檔名）', h('span', { class: 'req' }, ' *')),
-    h('input', { type: 'text', value: cs.abbr, class: cs.abbr && BAD_CHARS.test(cs.abbr) ? 'bad' : '', placeholder: '例如：城市倉儲', oninput: e => { cs.abbr = e.target.value.trim(); saveDraft(); updatePreviewNames(); } })));
+  g.append(h('label', { class: 'f' + (cs.abbr ? ' filled' : '') }, h('span', {}, '工程名稱縮寫（檔名會用到）', h('span', { class: 'req' }, ' *')),
+    h('input', { type: 'text', value: cs.abbr, class: cs.abbr && BAD_CHARS.test(cs.abbr) ? 'bad' : '', placeholder: '例如：城市倉儲', oninput: e => { cs.abbr = e.target.value.trim(); e.target.parentNode.classList.toggle('filled', !!cs.abbr); saveDraft(); updatePreviewNames(); } })));
   c5.append(g);
   if (cat) {
     const tb = h('tbody');
     for (const cd of caseDocs()) {
       const ch = cs.docChoices[cd.doc.id] || (cs.docChoices[cd.doc.id] = { include: true, tpl: 0 });
-      tb.append(h('tr', {},
-        h('td', {}, cd.byCl
-          ? h('span', { class: cd.include ? '' : 'muted', title: `依資料檢查表第 ${cd.doc.no} 項決定；要改請到「資料檢查表」` }, cd.include ? '✔' : '不須')
-          : h('input', { type: 'checkbox', checked: cd.include, onchange: e => { ch.include = e.target.checked; saveDraft(); render(); } })),
+      tb.append(h('tr', { class: cd.include ? '' : 'off' },
+        h('td', {}, cd.extra
+          ? h('button', { class: 'btn small danger', title: '不要產出這份其他文件', onclick: () => removeExtraDoc(cd.doc.id) }, '✕')
+          : cd.byCl
+          ? h('span', { class: cd.include ? 'okmark' : 'muted', title: `依資料檢查表第 ${cd.doc.no} 項決定；要改請到「資料檢查表」` }, cd.include ? '✔' : '不須')
+          : h('input', { type: 'checkbox', class: 'bigchk', checked: cd.include, onchange: e => { ch.include = e.target.checked; saveDraft(); render(); } })),
         h('td', { class: 'mono' }, noLabel(cd.doc.no) || '—'),
-        h('td', {}, cd.doc.name),
+        h('td', {}, cd.doc.name, cd.extra ? h('span', { class: 'tag' }, '其他文件') : null),
         h('td', {}, cd.doc.templates.length > 1
           ? h('select', { onchange: e => { ch.tpl = +e.target.value; saveDraft(); render(); } }, cd.doc.templates.map((t, i) => h('option', { value: i, selected: i === cd.tplIndex }, t.label)))
           : h('span', { class: 'muted' }, cd.doc.templates[0]?.label || '—')),
         h('td', { class: 'mono fname', 'data-no': cd.doc.no, 'data-name': cd.doc.name }, fileName(cd.doc.no, cs.abbr || '〔縮寫〕', cd.doc.name, '.docx')),
         h('td', {}, cd.doc.stamps.map(s => h('span', { class: 'tag' }, s + '用印')))));
     }
-    c5.append(h('div', { style: 'margin-top:14px;overflow-x:auto' }, h('table', {}, h('thead', {}, h('tr', {}, ['產出', '項次', '文件', '版本', '產出檔名', '用印'].map(t => h('th', {}, t)))), tb)));
+    c5.append(h('div', { style: 'margin-top:14px;overflow-x:auto' }, h('table', {}, h('thead', {}, h('tr', {}, ['產出', '項次', '文件', '版本', '產出檔名', '用印'].map(t => h('th', {}, t)))), tb)),
+      h('div', { class: 'row', style: 'margin-top:8px' }, h('button', { class: 'btn small', onclick: pickExtraDocs }, '➕ 加入其他文件…')));
   }
   const res = h('div', { id: 'checkResult', style: 'margin-top:14px' });
-  c5.append(res, h('div', { class: 'row', style: 'margin-top:10px' },
-    h('button', { class: 'btn', onclick: () => { res.innerHTML = ''; res.append(msgList(validateCase())); } }, '檢查資料'),
-    h('button', { class: 'btn primary', onclick: generate }, S.editing ? '重新產出…' : '產出文件…'),
-    h('span', { class: 'muted' }, S.editing ? '會先列出修改了什麼、影響哪幾份文件，確認後存回原本的案件資料夾；被取代的檔案會備份到「_舊版」。' : '按「產出文件」後，選擇要存放的案件資料夾。')));
-  addCard(c5, '全部文件', cat ? caseDocs().filter(x => x.include) : []);
+  const flow = h('div', { class: 'genflow' },
+    h('span', {}, '📝 填好資料'), h('span', { class: 'ar' }, '➜'), h('span', {}, S.editing ? '🔄 按「重新產出」' : '🚀 按「產出文件」'), h('span', { class: 'ar' }, '➜'),
+    h('span', {}, S.editing ? '📁 存回原本的案件資料夾' : '📁 選擇案件資料夾，Word 檔存在那裡'));
+  c5.append(res, flow, h('div', { class: 'genact' },
+    bigBtn('🔍', '檢查資料', '看看還有哪裡沒填或填錯', () => { res.innerHTML = ''; res.append(msgList(validateCase())); }),
+    bigBtn(S.editing ? '🔄' : '🚀', S.editing ? '重新產出…' : '產出文件…', S.editing ? '先列出改了什麼，確認後存回原資料夾；舊檔備份到「_舊版」' : '選好資料夾後，所有 Word 檔一次產出', generate, { cls: 'primary huge' + (ready ? ' ready' : ''), id: 'btnGen' })));
+  addCard(c5, '全部文件', cat ? caseDocs().filter(x => x.include) : [], ready);
+  for (const [i, si] of stepInfo.entries()) stepper.append(h('button', { class: 'stp' + (si.done ? ' done' : ''), title: si.done ? '填好了，點一下跳到這一步' : '點一下跳到這一步', onclick: () => { const c = $('#step-' + i); c && c.scrollIntoView({ behavior: 'smooth', block: 'start' }); setPvStep(i); } },
+    h('span', { class: 'sn' }, si.done ? '✔' : String(i + 1)), h('span', { class: 'sl' }, si.title)));
   PV.steps = pvSteps;
   if (PV.step >= pvSteps.length) PV.step = 0;
   main.onscroll = () => { clearTimeout(PV.scrollT); PV.scrollT = setTimeout(pickStepByScroll, 120); };
   buildPvPane();
+}
+/* 填寫時即時更新「填好了」的標示（不整頁重畫，避免打字中斷） */
+function refreshStepMarks() {
+  if (S.tab !== 'gen') return;
+  document.querySelectorAll('#main .card.step').forEach(card => {
+    if (card.classList.contains('final')) return;
+    const names = [...card.querySelectorAll('label.f[data-field]')].map(l => l.dataset.field);
+    if (!names.length) return;
+    const done = stepDone(names); card.classList.toggle('done', done);
+    const sd = card.querySelector('.sdone'); if (sd) { sd.classList.toggle('on', done); sd.textContent = done ? '✔ 填好了' : '待填'; }
+    const b = document.querySelectorAll('#stepper .stp')[+card.dataset.step];
+    if (b) { b.classList.toggle('done', done); b.querySelector('.sn').textContent = done ? '✔' : String(+card.dataset.step + 1); }
+  });
 }
 
 /* ==================== 即時預覽 ==================== */
@@ -1460,9 +1681,11 @@ async function saveTplVariant(cd) {
 function updatePreviewNames() {
   document.querySelectorAll('td.fname').forEach(td => td.textContent = fileName(+td.dataset.no, S.cs.abbr || '〔縮寫〕', td.dataset.name, '.docx'));
 }
-async function saveAsProfile(grp) {
+async function saveAsProfile(grp, from) {   // from：{ 監造人姓名: '專技人員姓名', … }，監造人／裝置人存成專技人員的常用資料
   const fields = S.settings.fields.filter(f => f.group === grp).map(f => f.name);
-  const values = {}; fields.forEach(k => { if (S.cs.values[k]) values[k] = S.cs.values[k]; });
+  const values = {};
+  if (from) Object.entries(from).forEach(([src, k]) => { if (S.cs.values[src]) values[k] = S.cs.values[src]; });
+  else fields.forEach(k => { if (S.cs.values[k]) values[k] = S.cs.values[k]; });
   if (!Object.keys(values).length) { toast('這一組欄位都還沒填'); return; }
   const def = values[fields[0]] || '';
   const inp = h('input', { type: 'text', value: def, style: 'width:100%' });
@@ -1929,7 +2152,7 @@ function viewCats(main) {
 /* ==================== 文件設定 ==================== */
 function viewDocs(main) {
   const st = S.settings;
-  main.append(h('h2', {}, '文件設定'), h('p', { class: 'lead' }, '每份文件的名稱（用於檔名）、項次（檔名前的編號，對應資料檢查表）、使用哪個模板、需要誰用印。一份文件可以有多個版本（例如一般版／工廠版），產出時再選。'));
+  main.append(h('h2', {}, '文件設定'), h('p', { class: 'lead' }, '每份文件的名稱（用於檔名）、項次（檔名前的編號，對應資料檢查表；空白＝不編號）、使用哪個模板、需要誰用印。一份文件可以有多個版本（例如一般版／工廠版），產出時再選。「其他文件」打勾的，會放進其他文件資料庫，文件產出時可以隨時加入。'));
   const tplOpts = S.tplFiles.map(f => f.name);
   const tb = h('tbody');
   for (const d of st.docs.slice().sort((a, b) => a.no - b.no)) {
@@ -1941,11 +2164,12 @@ function viewDocs(main) {
       d.templates.length > 1 ? h('button', { class: 'btn small danger', onclick: () => { d.templates.splice(i, 1); saveSettings(); render(); } }, '×') : null)));
     tcell.append(h('button', { class: 'btn small', onclick: () => { d.templates.push({ label: '版本' + (d.templates.length + 1), file: tplOpts[0] || '' }); saveSettings(); render(); } }, '＋ 版本'));
     tb.append(h('tr', {},
-      h('td', {}, h('input', { type: 'number', value: d.no, min: 0, style: 'width:64px', onchange: e => { d.no = Math.max(0, parseInt(e.target.value) || 0); saveSettings(); render(); } })),
+      h('td', {}, h('input', { type: 'number', value: d.no < 0 ? '' : d.no, min: 0, placeholder: '不編號', title: '空白＝檔名不加編號', style: 'width:72px', onchange: e => { const v = e.target.value.trim(); d.no = v === '' ? -1 : Math.max(0, parseInt(v) || 0); saveSettings(); render(); } })),
       h('td', {}, h('input', { type: 'text', value: d.name, class: BAD_CHARS.test(d.name) ? 'bad' : '', onchange: e => { d.name = e.target.value.trim(); saveSettings(); render(); } })),
       tcell,
       h('td', {}, st.roles.map(r => h('label', { class: 'chk', style: 'margin:0 4px 4px 0' }, h('input', { type: 'checkbox', checked: d.stamps.includes(r), onchange: e => { d.stamps = e.target.checked ? [...d.stamps, r] : d.stamps.filter(x => x !== r); saveSettings(); } }), r))),
       h('td', {}, h('input', { type: 'checkbox', checked: !!d.checklist, title: '這份是資料檢查表（會依項次自動勾選）', onchange: e => { d.checklist = e.target.checked; saveSettings(); } })),
+      h('td', {}, h('input', { type: 'checkbox', checked: !!d.pool, title: '放進「其他文件資料庫」：文件產出時可以隨時按「加入其他文件」選它', onchange: e => { d.pool = e.target.checked; saveSettings(); } })),
       h('td', {}, h('button', { class: 'btn small danger', onclick: async () => {
         const used = st.categories.filter(c => c.docIds.includes(d.id)).map(c => c.name);
         if (await confirmBox('刪除文件', `確定刪除「${esc(d.name)}」？${used.length ? '<br>會一併從這些類別移除：' + esc(used.join('、')) : ''}`, '刪除')) {
@@ -1953,10 +2177,10 @@ function viewDocs(main) {
         } } }, '刪除'))));
   }
   const nos = {}; st.docs.forEach(d => (nos[d.no] = nos[d.no] || []).push(d.name));
-  const dupNos = Object.entries(nos).filter(([, v]) => v.length > 1);
+  const dupNos = Object.entries(nos).filter(([n, v]) => +n >= 0 && v.length > 1);
   main.append(h('div', { class: 'card' },
     dupNos.length ? msgList(dupNos.map(([n, v]) => ({ type: 'warn', text: `項次 ${n} 有多份文件：${v.join('、')}（同一類別中不能同時使用）` }))) : null,
-    h('table', {}, h('thead', {}, h('tr', {}, ['項次', '文件名稱', '模板（版本名稱／檔案）', '需要用印', '檢查表', ''].map(t => h('th', {}, t)))), tb),
+    h('table', {}, h('thead', {}, h('tr', {}, ['項次', '文件名稱', '模板（版本名稱／檔案）', '需要用印', '檢查表', '其他文件', ''].map(t => h('th', {}, t)))), tb),
     h('div', { class: 'row', style: 'margin-top:12px' },
       h('button', { class: 'btn primary', onclick: () => { st.docs.push({ id: 'd' + uid(), no: Math.max(0, ...st.docs.map(d => d.no)) + 1, name: '新文件', stamps: [], templates: [{ label: '標準版', file: tplOpts[0] || '' }] }); saveSettings(); render(); } }, '＋ 新增文件'),
       h('span', { class: 'muted' }, '用印角色：'),
@@ -1970,6 +2194,7 @@ function viewTpls(main) {
   main.append(h('div', { class: 'card' }, h('div', { class: 'row' },
     h('button', { class: 'btn primary', onclick: async () => { await scanTemplates(); render(); toast('已重新掃描模板'); } }, '重新掃描'),
     h('button', { class: 'btn', onclick: addTemplate }, '＋ 加入新模板檔…'),
+    h('button', { class: 'btn primary', id: 'btnCustomTpl', onclick: () => customTemplate() }, '✨ 自訂模板（匯入 Word）'),
     h('span', { class: 'muted' }, '在 Word 中用 {欄位名稱} 標記要填入的地方；勾選框用 {□名稱}；資料檢查表的勾選框用 {□}。'))));
   const tb = h('tbody');
   for (const f of S.tplFiles) {
@@ -1994,6 +2219,144 @@ function viewTpls(main) {
   main.append(h('div', { class: 'card' },
     missing.length ? msgList(missing.map(n => ({ type: 'err', text: `文件設定使用了「${n}」，但 templates 資料夾裡找不到這個檔案。` }))) : null,
     S.tplFiles.length ? h('table', {}, h('thead', {}, h('tr', {}, ['模板檔', '最新更新日期', '版本紀錄', '標記', '檢查結果'].map(t => h('th', {}, t)))), tb) : h('p', { class: 'muted' }, 'templates 資料夾裡沒有任何 Word 檔。')));
+}
+/* ---------- 自訂模板：匯入任何 Word，點選文字指定欄位，存成新文件 ---------- */
+async function replaceInDocx(buf, find, repl) {   // 把所有段落裡的 find 換成 repl（可跨越格式不同的文字片段）
+  const pkg = await loadDocx(buf); let count = 0;
+  for (const part of pkg.parts) {
+    let changed = false;
+    for (const p of wEls(part.doc, 'p')) {
+      const ts = paraTexts(p); if (!ts.length) continue;
+      const texts = ts.map(t => t.textContent), full = texts.join('');
+      const hits = []; for (let i = full.indexOf(find); i >= 0; i = full.indexOf(find, i + find.length)) hits.push(i);
+      if (!hits.length) continue;
+      const starts = []; let acc = 0; for (const t of texts) { starts.push(acc); acc += t.length; }
+      const at = pos => { let i = 0; while (i + 1 < starts.length && starts[i + 1] <= pos) i++; return i; };
+      for (let k = hits.length - 1; k >= 0; k--) {
+        const s0 = hits[k], e0 = s0 + find.length, a = at(s0), b = at(e0 - 1);
+        if (a === b) texts[a] = texts[a].slice(0, s0 - starts[a]) + repl + texts[a].slice(e0 - starts[a]);
+        else { texts[a] = texts[a].slice(0, s0 - starts[a]) + repl; for (let j = a + 1; j < b; j++) texts[j] = ''; texts[b] = texts[b].slice(e0 - starts[b]); }
+      }
+      ts.forEach((t, i) => { if (t.textContent !== texts[i]) { t.textContent = texts[i]; t.setAttribute('xml:space', 'preserve'); } });
+      count += hits.length; changed = true;
+    }
+    if (changed) {
+      let xml = new XMLSerializer().serializeToString(part.doc);
+      if (!xml.startsWith('<?xml')) xml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' + xml;
+      pkg.zip.file(part.name, xml);
+    }
+  }
+  return { buf: count ? await pkg.zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' }) : buf, count };
+}
+function pickLocalFile(accept) {
+  return new Promise(res => {
+    const inp = h('input', { type: 'file', accept, style: 'display:none' });
+    inp.onchange = () => { res(inp.files[0] || null); inp.remove(); };
+    document.body.append(inp); inp.click();
+  });
+}
+async function customTemplate(file) {
+  const st = S.settings;
+  file = file || await pickLocalFile('.docx'); if (!file) return;
+  if (!/\.docx$/i.test(file.name)) { toast('請選擇 Word 檔（.docx）。舊的 .doc 請先用 Word 另存成 .docx'); return; }
+  let buf = await file.arrayBuffer();
+  try { await loadDocx(buf); } catch (e) { toast('這個 Word 檔打不開：' + e.message); return; }
+  const undo = [], done = [];
+  const baseName = file.name.replace(/\.docx$/i, '').replace(/_template\s*$/i, '').trim();
+  const ov = h('div', { class: 'overlay ctpl-ov' });
+  const pv = h('div', { class: 'ctpl-pv' }, h('div', { class: 'pvempty' }, '載入中…'));
+  const selIn = h('input', { type: 'text', id: 'ctplText', placeholder: '在左邊用滑鼠選取文字，會自動填到這裡', style: 'width:100%' });
+  const fieldSel = h('select', { id: 'ctplField', style: 'width:100%' }, h('option', { value: '' }, '— 請選擇欄位 —'),
+    st.groups.map(g => { const fs = st.fields.filter(f => f.group === g); return fs.length ? h('optgroup', { label: PRO_LABEL[g] || g }, fs.map(f => h('option', { value: f.name }, f.name))) : null; }),
+    h('optgroup', { label: '勾選框（□／■）' }, st.checkGroups.filter(g => !g.pairs).flatMap(g => g.items).map(i => h('option', { value: '□' + i }, '□' + i))),
+    h('optgroup', { label: '其他' }, h('option', { value: '*new' }, '＋ 新增一個欄位名稱…')));
+  const newIn = h('input', { type: 'text', placeholder: '新欄位名稱，例如：電機技師姓名', style: 'width:100%;display:none;margin-top:6px' });
+  fieldSel.onchange = () => { newIn.style.display = fieldSel.value === '*new' ? '' : 'none'; if (fieldSel.value === '*new') newIn.focus(); };
+  const doneList = h('ul', { class: 'ctpl-done' });
+  const existing = h('div', { class: 'muted', style: 'font-size:13px' });
+  const nameIn = h('input', { type: 'text', id: 'ctplName', value: baseName, style: 'width:100%' });
+  const noIn = h('input', { type: 'number', min: 0, placeholder: '不編號', style: 'width:90px' });
+  const poolChk = h('input', { type: 'checkbox', checked: true });
+  const catChks = st.categories.map(c => ({ c, el: h('input', { type: 'checkbox' }) }));
+  const stampChks = st.roles.map(r => ({ r, el: h('input', { type: 'checkbox' }) }));
+  const close = () => ov.remove();
+  const showMarks = root => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), nodes = [];
+    while (walker.nextNode()) { const n = walker.currentNode; if (n.nodeValue.includes('{') && !n.parentNode.closest('style,script')) nodes.push(n); }
+    for (const t of nodes) {
+      const frag = document.createDocumentFragment(), v = t.nodeValue; let last = 0;
+      for (const m of v.matchAll(MARK)) { frag.append(v.slice(last, m.index), h('mark', { class: 'ctpl-mk' }, m[0])); last = m.index + m[0].length; }
+      frag.append(v.slice(last)); t.replaceWith(frag);
+    }
+  };
+  const redraw = async () => {
+    const y = pv.scrollTop, tmp = h('div', {});
+    try { await docx.renderAsync(new Blob([buf]), tmp, null, { inWrapper: true, breakPages: true, experimental: true, useBase64URL: true, renderHeaders: true, renderFooters: true }); }
+    catch (e) { pv.innerHTML = '<div class="pvempty">預覽失敗：' + esc(e.message) + '</div>'; return; }
+    showMarks(tmp); pv.innerHTML = ''; pv.append(tmp); pv.scrollTop = y;
+    const info = await analyzeTemplate(buf.slice(0));
+    const fs = Object.keys(info.fields), cs = Object.keys(info.checks);
+    existing.textContent = fs.length || cs.length ? `目前已設定：${[...fs.map(k => '{' + k + '}'), ...cs.map(k => '{□' + k + '}')].join('、')}` : '目前還沒有任何欄位。';
+    doneList.innerHTML = '';
+    done.forEach(d => doneList.append(h('li', {}, h('span', { class: 'from' }, d.find), ' ➜ ', h('b', {}, d.repl), h('span', { class: 'muted' }, `（${d.count} 處）`))));
+    undoBtn.disabled = !undo.length;
+  };
+  pv.addEventListener('mouseup', () => { const t = String(window.getSelection() || '').replace(/[\r\n\t]+/g, '').trim(); if (t) { selIn.value = t; selIn.classList.add('flash'); setTimeout(() => selIn.classList.remove('flash'), 600); } });
+  const apply = async () => {
+    const find = selIn.value.replace(/[\r\n\t]+/g, '').trim();
+    let f = fieldSel.value;
+    if (f === '*new') f = newIn.value.trim().replace(/[{}]/g, '');
+    if (!find) { toast('① 先在左邊選取要換掉的文字'); selIn.focus(); return; }
+    if (!f) { toast('② 請選擇要換成哪個欄位'); fieldSel.focus(); return; }
+    const repl = '{' + f + '}';
+    const r = await replaceInDocx(buf, find, repl);
+    if (!r.count) { toast('文件裡找不到這段文字。請選短一點、在同一行內的文字再試一次'); return; }
+    undo.push(buf); buf = r.buf; done.push({ find, repl, count: r.count, field: f });
+    selIn.value = ''; window.getSelection()?.removeAllRanges();
+    toast(`已把 ${r.count} 處換成 ${repl}`); redraw();
+  };
+  const undoBtn = h('button', { class: 'btn small', onclick: () => { if (!undo.length) return; buf = undo.pop(); done.pop(); redraw(); toast('已復原上一步'); } }, '↶ 復原上一步');
+  const save = async () => {
+    const name = nameIn.value.trim();
+    if (!name) { toast('請填寫文件名稱'); nameIn.focus(); return; }
+    if (BAD_CHARS.test(name)) { toast('文件名稱不能包含 \\ / : * ? " < > |'); nameIn.focus(); return; }
+    const info = await analyzeTemplate(buf.slice(0));
+    if (!Object.keys(info.fields).length && !Object.keys(info.checks).length && !await confirmBox('還沒有設定欄位', '這份文件還沒有任何要自動填入的欄位，產出時會原封不動複製。<br>仍要存成模板嗎？', '仍要儲存')) return;
+    const fname = `${name}_template.docx`;
+    const dir = await getSub(S.root, TPL_DIR, true);
+    if (await fileExists(dir, fname) && !await confirmBox('模板已存在', `templates 裡已經有「${esc(fname)}」，要取代嗎？`, '取代')) return;
+    await writeFile(dir, fname, new Blob([buf], { type: MIME.docx }));
+    for (const d of done) if (!d.field.startsWith('□') && !st.fields.some(x => x.name === d.field)) st.fields.push({ name: d.field, group: '案件資料', required: false, options: [] });
+    const v = noIn.value.trim();
+    let doc = st.docs.find(d => d.name === name);
+    if (doc) { if (!doc.templates.some(t => t.file === fname)) doc.templates.push({ label: '自訂版', file: fname }); }
+    else { doc = { id: 'd' + uid(), no: v === '' ? -1 : Math.max(0, parseInt(v) || 0), name, stamps: stampChks.filter(x => x.el.checked).map(x => x.r), templates: [{ label: '標準版', file: fname }] }; st.docs.push(doc); }
+    if (poolChk.checked) doc.pool = true;
+    for (const { c, el } of catChks) if (el.checked && !c.docIds.includes(doc.id)) c.docIds.push(doc.id);
+    if (!await saveSettingsNow()) return;
+    await scanTemplates(); close(); render();
+    await modal('✔ 自訂模板已儲存', h('div', {}, h('p', {}, `已存成 templates\\${fname}`), h('p', {}, '要用的時候：',
+      poolChk.checked ? h('b', {}, '文件產出 ›「＋ 加入其他文件」裡選它') : null,
+      catChks.some(x => x.el.checked) ? h('span', {}, (poolChk.checked ? '，或' : '') + '選擇類別「' + catChks.filter(x => x.el.checked).map(x => x.c.name).join('、') + '」就會自動產出') : null, '。')));
+  };
+  const step = (n, title, ...kids) => h('div', { class: 'ctpl-step' }, h('div', { class: 'ctpl-h' }, h('span', { class: 'n' }, String(n)), title), ...kids);
+  const side = h('div', { class: 'ctpl-side' },
+    h('div', { class: 'ctpl-title' }, '✨ 自訂模板：', h('span', { class: 'muted' }, file.name)),
+    step(1, '用滑鼠在左邊選取要自動填入的文字', h('p', { class: 'muted' }, '例如選取地址「臺中市西屯區…」。'), selIn),
+    step(2, '選擇要換成哪個欄位', fieldSel, newIn),
+    step(3, '按下按鈕換成欄位', h('div', { class: 'row' }, h('button', { class: 'btn primary', id: 'ctplApply', onclick: apply }, '➜ 換成欄位'), undoBtn),
+      h('p', { class: 'muted', style: 'font-size:13px' }, '文件中所有相同的文字都會一起換掉，換好的地方左邊會變成綠色。'), doneList, existing),
+    step(4, '取名並儲存',
+      h('label', { class: 'f' }, '文件名稱（產出的檔名會用到）', nameIn),
+      h('label', { class: 'f' }, '項次（檔名前的編號，空白＝不編號）', noIn),
+      h('div', { style: 'margin-top:6px' }, h('label', { class: 'chk on' }, poolChk, '放進「其他文件資料庫」')),
+      st.categories.length ? h('div', { style: 'margin-top:6px' }, h('div', { class: 'muted' }, '也固定加到這些案件類別（可不選）：'), h('div', { class: 'checks' }, catChks.map(({ c, el }) => h('label', { class: 'chk' }, el, c.name)))) : null,
+      st.roles.length ? h('div', { style: 'margin-top:6px' }, h('div', { class: 'muted' }, '需要用印：'), h('div', { class: 'checks' }, stampChks.map(({ r, el }) => h('label', { class: 'chk' }, el, r)))) : null),
+    h('div', { class: 'row ctpl-ft' }, h('button', { class: 'btn', onclick: async () => { if (!done.length || await confirmBox('放棄', '設定好的欄位不會儲存，確定離開嗎？', '離開')) close(); } }, '✕ 取消'),
+      h('button', { class: 'btn primary big', id: 'ctplSave', onclick: save }, '💾 儲存模板')));
+  ov.append(h('div', { class: 'ctpl' }, pv, side));
+  document.body.append(ov);
+  redraw();
 }
 async function addTemplate() {
   if (!window.showOpenFilePicker) return;
@@ -2475,12 +2838,11 @@ function peRender() {
     has ? h('span', { class: 'pe-size', id: 'peSize' }) : null,
     has ? peAb('save', '存紀錄', { title: '存編輯紀錄：把目前的合併與標註存起來，之後可以再打開繼續修改', onclick: () => peSaveRecordOnly() }) : null,
     has ? peAb('download', '匯出', { cls: 'primary', id: 'peExport', title: '匯出 PDF', onclick: () => peExport() }) : null,
-    has ? peAb('trash', '', { cls: 'danger', title: '清除目前的全部內容，重新開始', onclick: async () => { if (!PE.dirty || await confirmBox('全部清除', '目前的合併與標註會全部清除（已匯出的檔案不受影響）。確定嗎？', '清除')) { peClearAll(); peRender(); } } }) : null].filter(Boolean));
+    has ? peAb('undo', '重新開始', { id: 'peReset', title: '關閉目前的全部內容，回到空白畫面（會先詢問）', onclick: async () => { if (await confirmBox('全部清除', '目前的合併與標註會全部清除（已匯出的檔案不受影響）。確定嗎？', '清除')) { peClearAll(); peRender(); } } }) : null].filter(Boolean));
   const srcs = $('#peSrcs'); srcs.innerHTML = ''; srcs.className = 'pe-srcs';
   for (const s of Object.values(PE.srcs)) {
     const n = PE.pages.filter(p => p.src === s.id).length;
-    srcs.append(h('span', { class: 'pe-src', title: s.name }, h('i', { style: `background:${s.color}` }), h('span', {}, `${s.name}（${n} 頁）`),
-      h('button', { title: '移除這個檔案的所有頁面', onclick: () => peRemoveSource(s.id) }, '×')));
+    srcs.append(h('span', { class: 'pe-src', title: s.name }, h('i', { style: `background:${s.color}` }), h('span', {}, `${s.name}（${n} 頁）`)));
   }
   if (!Object.keys(PE.srcs).length) srcs.style.display = 'none'; else srcs.style.display = '';
   const body = $('#peBody'); body.innerHTML = '';
@@ -2569,7 +2931,7 @@ function peGridBar() {
     peAb('rotl', '左轉', { cls: 'sm', disabled: !n, title: '選取的頁面向左轉', onclick: () => peRotate([...PE.sel], -90) }),
     peAb('rotr', '右轉', { cls: 'sm', disabled: !n, title: '選取的頁面向右轉', onclick: () => peRotate([...PE.sel], 90) }),
     peAb('file', '空白頁', { cls: 'sm', title: n ? '在選取頁後插入空白頁' : '最後加一頁空白頁', onclick: () => peBlank() }),
-    peAb('trash', '刪除', { cls: 'sm danger', disabled: !n, title: '刪除選取的頁面（Delete）', onclick: () => peDeletePages([...PE.sel]) }),
+    peAb('trash', n ? `刪除選取的 ${n} 頁` : '刪除選取頁', { cls: 'sm danger', disabled: !n, title: n ? `只刪除打勾的 ${n} 頁，其他頁不受影響（Delete；Ctrl+Z 可復原）` : '先在頁面左上角的圓圈打勾，再按這裡刪除', onclick: () => peDeletePages([...PE.sel]) }),
     h('span', { class: 'pe-vsep' }), peIcon('thumbS'),
     h('input', { type: 'range', min: 90, max: 280, step: 10, value: PE.thumb, title: '縮圖大小', style: 'width:90px', onchange: e => { PE.thumb = +e.target.value; peRender(); } }), peIcon('thumbL'));
 }
@@ -2585,8 +2947,7 @@ function peGridView(body) {
       h('div', { class: 'pe-tools' },
         h('button', { title: '向左轉', onclick: e => { e.stopPropagation(); peRotate([pg.id], -90); } }, peIcon('rotl')),
         h('button', { title: '向右轉', onclick: e => { e.stopPropagation(); peRotate([pg.id], 90); } }, peIcon('rotr')),
-        h('button', { title: '標註這一頁', onclick: e => { e.stopPropagation(); peOpenEditor(pg.id); } }, peIcon('edit')),
-        h('button', { class: 'del', title: '刪除這一頁', onclick: e => { e.stopPropagation(); peDeletePages([pg.id]); } }, peIcon('trash'))),
+        h('button', { title: '標註這一頁', onclick: e => { e.stopPropagation(); peOpenEditor(pg.id); } }, peIcon('edit'))),
       h('div', { class: 'pe-cap', title: s ? `${s.name} 第 ${pg.idx + 1} 頁` : '空白頁' },
         h('b', {}, String(i + 1)), h('span', { style: 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:' + (PE.thumb - 40) + 'px' }, s ? `${peSrcName(s.name)}・${pg.idx + 1}` : '空白頁'),
         pg.anns.length ? h('span', { class: 'an', title: `有 ${pg.anns.length} 個標註` }, '✎' + pg.anns.length) : null,
@@ -2778,7 +3139,8 @@ function peZoom(f, ev) {
   const old = PE.zoom, nz = f === 'fit' ? peFitZoom() : Math.max(0.25, Math.min(4, old * f));
   if (Math.abs(nz - old) < 0.001) return;
   const r = sc.getBoundingClientRect(), cy = ev && ev.clientY ? ev.clientY - r.top : sc.clientHeight / 2;
-  const ratio = (sc.scrollTop + cy) / sc.scrollHeight;
+  const cx = ev && ev.clientX ? ev.clientX - r.left : sc.clientWidth / 2;
+  const ratio = (sc.scrollTop + cy) / sc.scrollHeight, ratioX = (sc.scrollLeft + cx) / sc.scrollWidth;
   PE.zoom = nz; peCommitText();
   document.querySelectorAll('.pe-page').forEach(el => {
     const pg = pePage(el.dataset.pid), { W, H } = peDims(pg);
@@ -2786,6 +3148,7 @@ function peZoom(f, ev) {
     el.querySelector('canvas').dataset.z = 'stale';
   });
   sc.scrollTop = ratio * sc.scrollHeight - cy;
+  sc.scrollLeft = Math.max(0, ratioX * sc.scrollWidth - cx);
   PE.pages.forEach(peDrawAnns);
   clearTimeout(PE.zt); PE.zt = setTimeout(() => {
     document.querySelectorAll('.pe-page').forEach(el => { const r2 = el.getBoundingClientRect(), sr = sc.getBoundingClientRect(); if (r2.bottom > sr.top - 700 && r2.top < sr.bottom + 700) peLazy(el, true); });
@@ -4435,6 +4798,8 @@ function viewHelp(main) {
 <li>列印、用印後掃描，每份文件存成一個 PDF。</li>
 <li><b>掃描檔改名</b>：選案件資料夾 → 選掃描檔資料夾 → 逐一預覽並選擇對應文件 → 「改名並存放」。</li>
 <li><b>PDF 編輯</b>：到「④ PDF 編輯」加入（或拖進）多個 PDF → 拖曳縮圖調整順序、旋轉、刪除 → 切到「編輯」加上文字框、框線、圓圈、雲朵線、箭頭、手寫；要刪掉 PDF 上本來就有的文字、線條、圖片，用「刪原有物件」點選或拖曳框選後按 Delete → 「匯出」。勾選「同時存編輯紀錄」可以之後再打開繼續修改。中文字型檔放在系統資料夾的「字型」資料夾。</li>
+<li><b>臨時多一份文件</b>：在「文件產出」按「➕ 加入其他文件」，從其他文件資料庫打勾加入。要把新的 Word 變成模板，到「模板與版本」按「✨ 自訂模板」，用滑鼠選取文字、選欄位、按「換成欄位」，最後取名儲存。</li>
+<li><b>設計人、監造人、裝置人</b>：監造人、裝置人預設「同設計人」，不同人時把勾拿掉再填（模板要用 {監造人證書字號}、{裝置人姓名} 這類標記）。</li>
 <li><b>發現資料填錯</b>：到「③ 我的案件」找到案件 → 「打開修正」→ 改好資料 → 按「重新產出」。程式會列出改了什麼、影響哪幾份文件，只重新產出那幾份，舊檔備份在案件資料夾的「_舊版」。</li>
 </ol>
 <h3>模板標記規則</h3>
@@ -4442,6 +4807,7 @@ function viewHelp(main) {
 <li><span class="kbd">{欄位名稱}</span>：填入文字，例如 {工程名稱}。名稱需在「欄位與勾選框」登記。</li>
 <li><span class="kbd">{□名稱}</span>：勾選框，產出時變成「■名稱」或「□名稱」（名稱文字會保留）。同名的勾選框在所有文件中一起勾。</li>
 <li><span class="kbd">{□有-項目}{□無-項目}</span>：成對的有／無，表單上顯示成一個選單，產出時只印「■有 □無」。</li>
+<li>專技人員：設計人用 <span class="kbd">{專技人員姓名}{證書字號}{受託人電話}{執業機構名稱}{執業機構統編}{執業機構地址}</span>；監造人、裝置人把前面換成「監造人」「裝置人」，例如 <span class="kbd">{監造人姓名}{監造人證書字號}{監造人電話}{監造人執業機構名稱}{監造人執業機構統編}{監造人執業機構地址}</span>。</li>
 <li><span class="kbd">{□}</span>：只用在資料檢查表，依所在列的項次自動判斷「有／無／不須」三格。</li>
 </ul>
 <h3>多人共用注意事項</h3>

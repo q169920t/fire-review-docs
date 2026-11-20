@@ -78,3 +78,11 @@ t = c.beginText(80, 200); t.setFont('Helvetica', 20); t.setFillColorRGB(.85, .1,
 if vera:
     t = c.beginText(80, 120); t.setFont('Vera', 20); t.setFillColorRGB(.85, .1, .1); t.textOut('CCC'); t.setFillColorRGB(0, 0, 0); t.textOut('DDD'); c.drawText(t)
 c.showPage(); c.save()
+
+# v2.5 自訂模板測試用：一般 Word（沒有任何標記），監造人證號拆成兩段不同格式的文字
+d = docx.Document(); d.add_paragraph('測試切結書')
+d.add_paragraph('工程名稱：測試大樓新建工程')
+p = d.add_paragraph('監造人證號：'); p.add_run('消師證字'); r = p.add_run('第二號'); r.bold = True
+d.add_paragraph('設計人證號：消師證字第一號')
+d.add_paragraph('本案地址：臺中市測試路1號　再寫一次：臺中市測試路1號')
+d.save(os.path.join(W, 'pdf/custom.docx'))

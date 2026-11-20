@@ -66,6 +66,13 @@
 - 超過限制的處理方式 `PE.overMode`（localStorage `peOverMode`：`compress`／`split`／`none`，舊的 `peAutoSplit=false` 視為 none）。`compress` 走 `peCompressDialog()`：圖片覆蓋 ≥30% 頁面（`peImgCover()`）的頁算掃描頁，各頁只在目標 dpi 低於自己原解析度時才轉圖片；JPEG 品質 `PE_COMPRESS_Q`=0.75；由高到低試算整份大小，找到符合的再多算一個就停；選定後直接用試算的結果存檔。
 - 測試注意：Playwright 的檔案選擇無法上傳中文檔名，測試時要先複製成英文檔名。e2e 會套用一次「更新」，`/tmp/fire-e2e/home/cache/app.html` 會留下舊程式；自己另外測試時要先刪掉它，否則開的是舊版。
 
+## v2.5：文件產出新介面、其他文件、專技人員三組、自訂模板
+- 文件產出畫面（`viewGen`）只在這個分頁加 `main.gen-main`（字大、樣式都以它為前綴，不影響其他分頁）；切換分頁第一次畫面加 `.fresh` 才播淡入動畫（避免每次 `render()` 閃爍）。大按鈕 `bigBtn(icon, 標題, 一句說明, onclick, {cls,id})`。步驟列 `#stepper .stp`，卡片 id `step-N`；完成判斷 `stepDone(fields)`（必填都有值），打字時 `refreshStepMarks()` 只更新標示不重畫。欄位 `label.f` 有 `data-field`，有值加 `.filled`。e2e 依賴的 `#checkResult`、`#pvpane`、`.card.step h3`、`.editbar`、按鈕文字「存檔」「重新產出…」都要保留。
+- 其他文件：文件 `pool: true` ＝放進其他文件資料庫；案件 `cs.extraDocs = [文件id]`，`caseDocs()` 會把它們接在類別文件後面（`cd.extra`，一律產出、不受檢查表決定），欄位歸到 `caseSteps()` 的「其他文件」步驟。`pickExtraDocs()` 選擇、`removeExtraDoc()` 移除。項次留白＝`no: -1`（項次重複的檢查會略過負數）。
+- 專技人員：設計人＝原本欄位（`PRO_BASE`），監造人／裝置人欄位＝角色＋`PRO_SUFFIX`（`proMap(role)`）。`cs.proSame[role] === false` 才是不同人，預設同設計人；`syncPros(cs)` 在 `saveDraft`、`normalizeCase`、`validateCase` 時把設計人的值複製過去，所以產出、預覽、重新產出比對都直接看 `cs.values`。設定 schema 4（`migrateSettings`）加入群組「監造人」「裝置人」與 14 個欄位；常用資料共用「專技人員」那一組（`saveAsProfile(grp, from)` 會把監造人欄位換回專技人員欄位名稱存）。
+- 自訂模板：`customTemplate(file)`（`#btnCustomTpl`）。預覽用 docx-preview，選取文字 mouseup 填入 `#ctplText`，`replaceInDocx(buf, find, '{欄位}')` 換掉所有段落裡相同的文字（可跨格式不同的片段，和 `fillTemplate` 同一套切割方式）。預覽上色 `showMarks` 要跳過 `<style>` 裡的文字（CSS 也有大括號）。儲存寫 `templates/<名稱>_template.docx`，新增文件（`pool: true`、預設 `no: -1`），新的欄位名稱自動登記在「案件資料」。
+- PDF 編輯：`.pe-pages` 設 `width:max-content; min-width:100%`，放大後才捲得到最左邊；`peZoom` 也保留水平位置。來源檔標籤沒有 ×、縮圖沒有單頁刪除鈕，只有 `.pe-gbar`「刪除選取的 N 頁」；上方 `#peReset`「重新開始」一定詢問。
+
 ## 我的案件（案件存檔與修正重新產出）
 - 清單存在系統資料夾 `案件紀錄\<使用者名稱>.json`（每人一份），每筆含 `id`（= 案件資料的 `caseId`）、資料夾名稱與路徑、完整案件資料快照。
 - 產出新案件後自動進入「修正模式」（`S.editing`，存在 localStorage `editingCase`）；修正模式下「產出」改走 `regenerate()`：比對 `diffCase()` → `affectReasons()` 預選受影響文件 → 舊檔移到 `_舊版\YYYYMMDD-HHmm\` → 更新 `outputs`（重產的加 `revisedAt`）與 `history`。
