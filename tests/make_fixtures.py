@@ -8,7 +8,7 @@ names = ['資料檢查表_template.docx', '圖說審查申請書_template.docx',
          '危險物品切結書_template.docx', '危險物品切結書_工廠版_template.docx', '建築圖切結書_template .docx']
 for n in names:
     d = docx.Document(); d.add_paragraph('工程名稱：{工程名稱}　地址：{建築地址}'); d.add_paragraph('{□新建}新建 {□增建}增建'); r = d.add_paragraph().add_run('第三段\t定位點'); r.bold = True
-    if n.startswith('委託書'): d.add_paragraph('受託人電話：{受託人電話}')
+    if n.startswith('委託書'): d.add_paragraph('受託人電話：{受託人電話}'); d.add_paragraph('受託人：{專技人員姓名} {□監造}{□裝置}{□竣工查驗}')
     d.save(os.path.join(W, 'root/templates', n))
 # 資料檢查表：有表格（項次、名稱、有、無、不須、備註）
 d = docx.Document(); d.add_paragraph('資料檢查表 {工程名稱}')
@@ -21,6 +21,22 @@ d = docx.Document(); d.add_paragraph('圖審所需文件 {□新建}{□增建}'
 d.add_paragraph('{序}、業主用印文件'); d.add_paragraph('{列:8}■委託書'); d.add_paragraph('{列:□新建|□增建}■核准函'); d.add_paragraph('{列:8,!□新建}■使用執照')
 t = d.add_table(rows=2, cols=1); t.rows[0].cells[0].text = '{列:13}{序}、電機技師知會函'; t.rows[1].cells[0].text = '{序}、結尾'
 d.save(os.path.join(W, 'root/templates', '圖審所需文件_template.docx'))
+# v2.6 竣工查驗：模板放在 templates\竣工查驗\ 子資料夾；檢查表是兩欄（檢附／不需）
+J = os.path.join(W, 'root/templates/竣工查驗'); os.makedirs(J)
+d = docx.Document(); d.add_paragraph('竣工檢查表')
+t = d.add_table(rows=0, cols=4)
+for no, name in [(1, '查驗申請書'), (2, '檢查表'), (6, '工廠登記'), (8, '委託書'), (9, '樓層檢討表'), (10, '竣工圖說切結書'), (11, '危險物品切結書'), (12, '一般工廠切結書'), (15, '查核設備證明書'), (16, '審查表')]:
+    c = t.add_row().cells; c[0].text = str(no); c[1].text = name; c[2].text = '{□}'; c[3].text = '{□}'
+d.save(os.path.join(J, '竣工查驗案件檢附資料檢查表_template.docx'))
+for n, body in [('竣工查驗申請書', '申請人：{管理權人機構} 設計人證號：{證書字號} 監造人證號：{監造人證書字號} 裝置人：{裝置人姓名}'),
+                ('變更監造人報備書', '原監造人：{專技人員姓名} 改由：{監造人姓名}'),
+                ('竣工圖說切結書', '立書人：{監造人姓名}'), ('「一般‧無開口」樓層檢討表', '場所：{工程名稱}'),
+                ('查驗申請案件查核設備證明書', '統一編號：{管理權人統編} 監造人：{監造人姓名} 裝置人：{裝置人姓名}'),
+                ('查驗應檢附證明文件審查表', '工程：{工程名稱}'),
+                ('竣工所需文件', '{序}、業主用印文件|{列:12}■工廠版切結書|{列:8,□監造人異動}■報備書')]:
+    d = docx.Document()
+    for line in body.split('|'): d.add_paragraph(line)
+    d.save(os.path.join(J, n + '_template.docx'))
 for i in range(2): open(os.path.join(W, f'scan/scan{i}.pdf'), 'wb').write(b'%PDF-1.4\n%test' + bytes([i]))
 s = open(APP, encoding='utf8').read()
 import re

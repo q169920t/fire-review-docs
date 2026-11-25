@@ -44,7 +44,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await page.reload(); await sleep(1500);
   check('重新開啟自動進入主畫面', await page.isVisible('#layout') && !(await page.isVisible('button:has-text("選擇系統資料夾")')));
   const tplCount = await page.evaluate(() => S.tplFiles.length);
-  check('讀到模板', tplCount === 8, `(${tplCount})`);
+  check('讀到模板（含竣工查驗子資料夾 8 個）', tplCount === 16 && await page.evaluate(() => S.tplFiles.filter(f => f.name.startsWith('竣工查驗/')).length === 8), `(${tplCount})`);
   const t0 = await page.evaluate(() => S.tplFiles[0]);
   check('模板修改時間正確', Math.abs(t0.lastModified - fs.statSync(path.join(W, 'root', 'templates', t0.name)).mtimeMs) < 2, t0.name);
 
@@ -634,6 +634,42 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
     check('專技人員：取消同設計人後可分開填寫', txt.includes('監造人證號：監造證號B') && txt.includes('設計人證號：設計證號C'), txt.slice(0, 120));
     check('專技人員：欄位已登記在設定裡', await page.evaluate(() => ['監造人', '裝置人'].every(r => S.settings.groups.includes(r) && S.settings.fields.some(f => f.name === r + '證書字號'))));
     await page.evaluate(() => { S.cs.extraDocs = []; S.cs.proSame = {}; saveDraft(); render(); });
+
+    // v2.6 竣工查驗
+    const mig = await page.evaluate(() => { const st = { options: { schema: 4 }, groups: [], fields: [{ name: '管理權人通訊處', group: '業主' }], checkGroups: [{ name: '檢附資料', pairs: true, items: ['其他'] }], docs: [], categories: [] };
+      migrateSettings(st); return { sc: st.options.schema, f: st.fields.map(f => f.name).join(), j: st.docs.map(d => d.id).join(), c: st.categories.map(c => c.name).join(), p: st.checkGroups[0].items.join(), g: st.checkGroups.some(g => g.items.includes('監造人異動')) }; });
+    check('竣工：舊設定升級加入竣工查驗', mig.sc === 5 && mig.f === '管理權人通訊處,管理權人統編' && mig.j.includes('j08b') && mig.c === '竣工-變使室修,竣工-室內裝修,竣工-新建' && mig.p.includes('外觀照片') && mig.g, JSON.stringify(mig));
+    check('竣工：讀得到子資料夾裡的模板', await page.evaluate(() => !!S.tplInfo['竣工查驗/竣工查驗申請書_template.docx'] && S.tplInfo['竣工查驗/竣工查驗案件檢附資料檢查表_template.docx'].clCols === 2));
+    await page.evaluate(() => { S.cs = blankCase(); S.cs.abbr = '竣工測試'; selectCategory('cj1'); Object.assign(S.cs.values, { 專技人員姓名: '設計甲', 證書字號: '設計證1', 管理權人統編: '12345678' }); saveDraft(); render(); }); await sleep(600);
+    check('竣工：檢查表顯示檢附／不需兩欄', (await page.$$eval('.cltable th', a => a.map(x => x.textContent).join())).includes('檢附,不需'));
+    const names = () => page.evaluate(() => caseDocs().filter(x => x.include).map(x => fileName(x.doc.no, S.cs.abbr, x.doc.name, '.docx')));
+    let nm = await names();
+    check('竣工：同一人只出一份委託書，沒勾異動不出報備書', nm.filter(n => n.includes('委託書')).length === 1 && !nm.some(n => n.includes('報備書')) && nm.includes('11竣工測試-危險物品切結書.docx'), nm.join(' '));
+    const docText = name => page.evaluate(async n => { const cd = caseDocs().find(x => x.doc.name === n); const b = await fillTemplate((await tplBuffer(cd.file)).slice(0), resolver(cd), { cond: condEval }); const z = await JSZip.loadAsync(b); return (await z.file('word/document.xml').async('string')).replace(/<[^>]+>/g, ''); }, name);
+    let wt = await docText('委託書');
+    check('竣工：同一份委託書監造、裝置都勾', wt.includes('受託人：設計甲 ■監造■裝置■竣工查驗'), wt.slice(-60));
+    await page.evaluate(() => { S.cs.proSame = { 裝置人: false }; Object.assign(S.cs.values, { 裝置人姓名: '裝置乙', 裝置人證書字號: '裝置證2', 裝置人電話: '04-0000' }); saveDraft(); render(); }); await sleep(500);
+    nm = await names();
+    check('竣工：裝置人不同時委託書分兩份', nm.includes('08竣工測試-委託書(監造人).docx') && nm.includes('08竣工測試-委託書(裝置人).docx'), nm.join(' '));
+    wt = await docText('委託書(裝置人)');
+    check('竣工：裝置人那份帶入裝置人資料', wt.includes('受託人電話：04-0000') && wt.includes('受託人：裝置乙 □監造■裝置■竣工查驗'), wt.slice(-80));
+    wt = await docText('委託書(監造人)');
+    check('竣工：監造人那份帶入監造人資料', wt.includes('受託人：設計甲 ■監造□裝置■竣工查驗'), wt.slice(-60));
+    check('竣工：步驟裡有監造人異動勾選', (await page.$$('#main .chk:has-text("監造人異動")')).length === 1);
+    await page.evaluate(() => { S.cs.checks['監造人異動'] = true; saveDraft(); render(); }); await sleep(400);
+    nm = await names();
+    check('竣工：勾監造人異動才出報備書', nm.includes('08竣工測試-變更監造人報備書.docx'), nm.join(' '));
+    await page.click('.cltable tr:has(td.c:text-is("12")) td.clc[data-s="有"]'); await sleep(500);
+    const fac = await page.evaluate(() => ({ cl: [S.cs.cl[6], S.cs.cl[11], S.cs.cl[12]].join(), tpl: S.cs.docChoices.j11.tpl, nm: caseDocs().filter(x => x.include).map(x => fileName(x.doc.no, S.cs.abbr, x.doc.name, '')).filter(n => n.includes('危險')) }));
+    check('竣工：檢查表勾第 12 項自動換工廠版並校正 6、11 項', fac.cl === '有,不須,有' && fac.tpl === 1 && fac.nm.join() === '12竣工測試-危險物品切結書', JSON.stringify(fac));
+    await page.evaluate(() => { pickTemplate(docById('j11'), 0); saveDraft(); render(); }); await sleep(300);
+    check('竣工：改回一般版時第 11 項需要、6 與 12 項不需', await page.evaluate(() => [S.cs.cl[6], S.cs.cl[11], S.cs.cl[12]].join()) === '不須,有,不須');
+    const ct = await docText('竣工查驗案件檢附資料檢查表');
+    check('竣工：兩欄式檢查表打勾正確', ct.includes('11危險物品切結書■□') && ct.includes('12一般工廠切結書□■'), ct.slice(0, 200));
+    wt = await docText('竣工所需文件');
+    check('竣工：所需文件依條件列出', wt.includes('報備書') && !wt.includes('工廠版切結書'), wt);
+    check('竣工：檢查資料沒有錯誤', await page.evaluate(() => !validateCase().some(m => m.type === 'err')), JSON.stringify(await page.evaluate(() => validateCase())));
+    await page.evaluate(() => { S.cs = blankCase(); selectCategory(S.settings.categories[0].id); saveDraft(); render(); }); await sleep(300);
 
     // PDF 編輯：放大後可以捲到最左邊；只有一個刪除按鈕、只刪選取頁
     await page.click('nav button:has-text("PDF 編輯")'); await sleep(300);

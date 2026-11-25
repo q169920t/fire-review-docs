@@ -22,7 +22,7 @@
   - `main.go`：本機服務（127.0.0.1:47321，隨機通行碼 `X-App-Token`）、設定檔、更新邏輯
   - `ui_windows.go`：視窗、選資料夾對話框；`ui_other.go`：Linux 開發測試用（不開視窗）
   - `build.sh`：編譯 `dist/FireReviewDocs.exe`（會把 HTML 複製成 `shell/app.html` 內嵌）
-- `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，145 項；PDF 編輯的檢查用 `tests/pdf_check.py`，需要 pypdf、pypdfium2、reportlab）
+- `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，201 項；PDF 編輯的檢查用 `tests/pdf_check.py`，需要 pypdf、pypdfium2、reportlab）
 - `.github/workflows/release.yml`：main 上 CHANGELOG 出現有日期的新版本時，自動編譯並建立 Release
 - `docs/`：給人看的說明；`CHANGELOG.md`：每次發布的更新說明（白話）
 
@@ -65,6 +65,14 @@
 - 匯出：`peBuildPdf(progress, { pages, raster: {頁id: dpi}, onCanvas })`，最後一律 `peDedupe()` + `peGC()`。超過限制且勾選自動分割（`PE.autoSplit`）時走 `peSplitPlan()`：先找單頁就超過的頁 → `peOversizeDialog()` 列出解析度（含原解析度，`peNativeDpi()` 取佔頁面面積最多的圖片解析度、用長邊算）試算大小與預覽 → 依頁序貪婪分組（轉成圖片的頁用實際大小）→ 每組實際建檔，超過就把最後一頁移到下一組。分割檔名 `檔名(a-b頁).pdf`。轉成圖片用 `pePlaceRaster()`：灰階頁存灰階，JPEG(0.92) 與無損 Flate 取較小。
 - 超過限制的處理方式 `PE.overMode`（localStorage `peOverMode`：`compress`／`split`／`none`，舊的 `peAutoSplit=false` 視為 none）。`compress` 走 `peCompressDialog()`：圖片覆蓋 ≥30% 頁面（`peImgCover()`）的頁算掃描頁，各頁只在目標 dpi 低於自己原解析度時才轉圖片；JPEG 品質 `PE_COMPRESS_Q`=0.75；由高到低試算整份大小，找到符合的再多算一個就停；選定後直接用試算的結果存檔。
 - 測試注意：Playwright 的檔案選擇無法上傳中文檔名，測試時要先複製成英文檔名。e2e 會套用一次「更新」，`/tmp/fire-e2e/home/cache/app.html` 會留下舊程式；自己另外測試時要先刪掉它，否則開的是舊版。
+
+## v2.6：竣工查驗
+- 模板子資料夾：`scanTemplates` 會讀 `templates\<子資料夾>\`（`listDirs` 略過 `_ ~ .` 開頭），檔名記成 `子資料夾/檔名`；讀寫一律用 `readTpl(file)`／`writeTpl(file, blob)`（`tplLoc` 逐層找資料夾）。
+- 設定 schema 5（`migrateSettings`）：欄位 `管理權人統編`、檢附資料 `外觀照片`、勾選群組「竣工查驗」的 `監造人異動`，並加入 `jungongDefaults()` 的文件（id `j..`）與類別（`cj1..3`）。
+- 文件新屬性：`perRole: ['監造人','裝置人']`＝依受託人分份（`roleCopies()`，以姓名＋證書字號判斷是否同一人；分份的 `cd.doc` 是衍生物件，`id` 為 `j08@監造人`、`baseId` 指回原文件，`docById` 會去掉 `@` 後面；`cd.roles` 讓 `resolver` 把設計人欄位換成該角色欄位、並決定 {□監造}{□裝置}）。`cond: '□監造人異動'`＝文件出現條件（不符時 `cd.condOff`，勾選框仍會出現在步驟裡）。
+- 模板版本可帶 `no` 與 `clSet`（例：危險物品切結書工廠版 `no: 12, clSet: {11:'不須', 6:'有'}`）：`pickTemplate()` 套用；檢查表某項改成需要時 `clLinked()` 自動換版本。cd 的項次一律看 `cd.doc.no`（已套用版本的 no）。
+- 資料檢查表兩欄式（檢附／不需）：`analyzeTemplate` 數每列 `{□}` 個數存 `info.clCols`；`checklistCols(cat)`、`checklistTable(items, cols)`、`resolver` 都依此切換。內部狀態仍是 有／無／不須。
+- 項次重複檢查改成「同項次且同名稱」才算檔名重複（委託書與報備書都是第 8 項）。
 
 ## v2.5：文件產出新介面、其他文件、專技人員三組、自訂模板
 - 文件產出畫面（`viewGen`）只在這個分頁加 `main.gen-main`（字大、樣式都以它為前綴，不影響其他分頁）；切換分頁第一次畫面加 `.fresh` 才播淡入動畫（避免每次 `render()` 閃爍）。大按鈕 `bigBtn(icon, 標題, 一句說明, onclick, {cls,id})`。步驟列 `#stepper .stp`，卡片 id `step-N`；完成判斷 `stepDone(fields)`（必填都有值），打字時 `refreshStepMarks()` 只更新標示不重畫。欄位 `label.f` 有 `data-field`，有值加 `.filled`。e2e 依賴的 `#checkResult`、`#pvpane`、`.card.step h3`、`.editbar`、按鈕文字「存檔」「重新產出…」都要保留。
