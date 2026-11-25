@@ -31,7 +31,7 @@ import (
 )
 
 // ShellVersion 是 exe 外殼本身的版本；只有外殼程式碼改變時才需要調升。
-const ShellVersion = "1.0"
+const ShellVersion = "1.1"
 
 const (
 	appDirName    = "審勘文件管理"

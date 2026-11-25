@@ -21,6 +21,7 @@
 - `shell/`：exe 外殼（Go + WebView2）。只負責開視窗、本機檔案存取、線上更新；畫面與功能都在 HTML。
   - `main.go`：本機服務（127.0.0.1:47321，隨機通行碼 `X-App-Token`）、設定檔、更新邏輯
   - `ui_windows.go`：視窗、選資料夾對話框；`ui_other.go`：Linux 開發測試用（不開視窗）
+  - 程式圖示：`app.ico`（原稿 `app-icon.svg`）→ `app.rc` → `rsrc_windows_amd64.syso`（資源編號 1，`ui_windows.go` 的 `IconId: 1` 要一致；go build 自動帶入）。換圖示＝換 app.ico 後重跑 `llvm-windres-18 --target=pe-x86-64 -i app.rc -o rsrc_windows_amd64.syso`，並調升 ShellVersion。HTML 的 `<link rel="icon">` 是瀏覽器分頁用的同一張圖。
   - `build.sh`：編譯 `dist/FireReviewDocs.exe`（會把 HTML 複製成 `shell/app.html` 內嵌）
 - `tests/`：端對端測試，`bash tests/run.sh`（Linux 跑本機服務 + Playwright Chromium，201 項；PDF 編輯的檢查用 `tests/pdf_check.py`，需要 pypdf、pypdfium2、reportlab）
 - `.github/workflows/release.yml`：main 上 CHANGELOG 出現有日期的新版本時，自動編譯並建立 Release

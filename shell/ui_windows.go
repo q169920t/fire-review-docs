@@ -92,6 +92,7 @@ func runUI(s *Server, url string) {
 			Width:  1440,
 			Height: 920,
 			Center: true,
+			IconId: 1, // 程式圖示（shell/app.rc 的資源編號）
 		},
 	})
 	if w == nil {
